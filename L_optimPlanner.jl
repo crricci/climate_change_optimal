@@ -1,23 +1,23 @@
 
 
-function optimPlanner(p)
+function optimPlanner(p; quiet = false)
     
     plannerProblem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(plannerProblem, "tol", 1e-16)
 
-    epsilon = 0.0
     varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     @variables(plannerProblem,begin
-        C1 ≥ epsilon
-        C2 ≥ epsilon
-        B1 ≥ 0 
-        B2 ≥ 0 
-        I1 ≥ 0
-        I2 ≥ 0
-        Ra ≥ 0
-        Rb ≥ 0
+        C1 ≥ 0.0
+        C2 ≥ 0.0
+        B1 ≥ 0.0
+        B2 ≥ 0.0
+        I1 ≥ 0.0
+        I2 ≥ 0.0
+        Ra ≥ 0.0
+        Rb ≥ 0.0
     end)
 
+    # subexpressions
     @NLexpressions(plannerProblem, begin
     gRb, (Rb + p.g0) / (p.g∞ * Rb + 1)
     hRa, (Ra + p.h0) / (p.h∞ * Ra + 1)
@@ -25,8 +25,6 @@ function optimPlanner(p)
     fI2, I2^p.α
     D1, p.b̅ * B1^p.θ1
     D2, p.b̅ * gRb * B2^p.θ2
-
-    # objective
     I, I1 + I2
     D, D1 + D2
     GID, p.cI * I^p.δI - p.cD * D^p.δD
@@ -44,18 +42,27 @@ function optimPlanner(p)
         @NLexpression(plannerProblem, u2C2, C2^(1-p.σ2)/(1-p.σ2))
     end
 
+    # budget constraint
     @NLconstraint(plannerProblem,BudgetConstraint,
     C1 + C2 + B1 + B2 + I1 + I2 + Ra + Rb ≤ p.A̅ * (fI1 + hRa * fI2))
 
-    Φ = (p.γ1 + p.k * p.γ2) * (p.ϕL / p.ρ + (1-p.ϕL) * p.ϕ0 / (p.ρ + p.ϕ))
+    Φ = (p.ϕL / p.ρ + (1-p.ϕL) * p.ϕ0 / (p.ρ + p.ϕ))
 
-    @NLobjective(plannerProblem, Max, u1C1 + p.k * u2C2 - Φ*GID)
+    # objective
+    @NLobjective(plannerProblem, Max, u1C1 + u2C2 - (p.γ1 + p.γ2) * Φ * GID)
 
-    unset_silent(plannerProblem)
+    # verbose
+    if quiet == false
+        unset_silent(plannerProblem)
+    else
+        set_silent(plannerProblem)
+    end
+
     optimize!(plannerProblem)
-
-    solution = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
-
-    return(solution)
+    
+    solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
+    solValues[solValues .< 0] .= 0
+    solDict = Dict(zip(varNames,solValues))
+    return solDict
 end
 
