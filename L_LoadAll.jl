@@ -1,4 +1,5 @@
 # Basic 
+using Symbolics
 using LinearAlgebra
 using Parameters
 

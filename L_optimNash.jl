@@ -35,7 +35,7 @@ function iterate1(p,B2,I2)
     nash1Problem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(nash1Problem, "tol", 1e-16)
 
-    @variables(nash1Problem,begin
+    JuMP.@variables(nash1Problem,begin
         C1 ≥ 0.0
         B1 ≥ 0.0
         I1 ≥ 0.0
@@ -45,7 +45,8 @@ function iterate1(p,B2,I2)
 
     # subexpressions
     @NLexpressions(nash1Problem, begin
-    gRb, (Rb + p.g0) / (p.g∞ * Rb + 1)
+    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
+    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
     fI1, I1^p.α
     D1, p.b̅ * B1^p.θ1
     D2, p.b̅ * gRb * B2^p.θ2
@@ -85,7 +86,7 @@ function interate2(p,B1,I1,Ra,Rb)
     nash2Problem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(nash2Problem, "tol", 1e-16)
 
-    @variables(nash2Problem,begin
+    JuMP.@variables(nash2Problem,begin
         C2 ≥ 0.0
         B2 ≥ 0.0
         I2 ≥ 0.0
@@ -93,8 +94,8 @@ function interate2(p,B1,I1,Ra,Rb)
 
     # subexpressions
     @NLexpressions(nash2Problem, begin
-    gRb, (Rb + p.g0) / (p.g∞ * Rb + 1)
-    hRa, (Ra + p.h0) / (p.h∞ * Ra + 1)
+    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
+    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
     fI2, I2^p.α
     D1, p.b̅ * B1^p.θ1
     D2, p.b̅ * gRb * B2^p.θ2

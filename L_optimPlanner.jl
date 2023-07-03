@@ -6,7 +6,7 @@ function optimPlanner(p; quiet = false)
     set_optimizer_attribute(plannerProblem, "tol", 1e-16)
 
     varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
-    @variables(plannerProblem,begin
+    JuMP.@variables(plannerProblem,begin
         C1 ≥ 0.0
         C2 ≥ 0.0
         B1 ≥ 0.0
@@ -19,8 +19,8 @@ function optimPlanner(p; quiet = false)
 
     # subexpressions
     @NLexpressions(plannerProblem, begin
-    gRb, (Rb + p.g0) / (p.g∞ * Rb + 1)
-    hRa, (Ra + p.h0) / (p.h∞ * Ra + 1)
+    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
+    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
     fI1, I1^p.α
     fI2, I2^p.α
     D1, p.b̅ * B1^p.θ1

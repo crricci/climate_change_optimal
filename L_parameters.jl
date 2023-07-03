@@ -24,7 +24,7 @@
 
     # Depollution
     b̅::T = 1.0
-    g0::T = 0.5
+    g0::T = 0.2
     g∞::T = 0.9
     θ1::T = 0.5
     θ2::T = 0.5
@@ -34,17 +34,35 @@
     δD::T = 1.0
 
    # CHECKS
-#    @assert 0 < α < 1
-#    @assert A̅*h0 > 1
-#    @assert h0 < 1
-#    @assert h∞ < 1
-#    @assert g0 < 1
-#    @assert g∞ < 1
-#    @assert θ1 < 1
-#    @assert θ2 < 1
-#    @assert 0 < δI < 1
-#    @assert δD > 1
+   @assert 0 < α <= 1
+   @assert A̅*h0 > 1
+   @assert h0 < 1
+   @assert h∞ < 1
+   @assert h0 < h∞
+   @assert g0 < 1
+   @assert g∞ < 1
+   @assert g0 < g∞
+   @assert θ1 < 1
+   @assert θ2 < 1
+   @assert 0 < δI <= 1
+   @assert δD >= 1
+   @assert gθ_isConcave(g0,g∞,θ2)
 
+end
 
+function gθ_isConcave(g0,g∞,θ)
+
+    x = LinRange(0,100,1000);
+
+    Symbolics.@variables xS g0S g∞S θS;
+    fExpr = ((g∞S * xS + g0S)/(xS+1))^(1/(1-θS));
+    D = Differential(xS);
+    fExpr2nd = expand_derivatives(D(D(fExpr)))
+
+    if any(p -> p >= 0, [substitute(fExpr2nd,(Dict(xS => xi, g0S => g0, g∞S => g∞, θS => θ))) for xi in x])
+        return false
+    else
+        return true
+    end
 end
 
