@@ -24,7 +24,7 @@
 
     # Depollution
     b̅::T = 1.0
-    g0::T = 0.2
+    g0::T = 0.5
     g∞::T = 0.9
     θ1::T = 0.5
     θ2::T = 0.5
@@ -33,20 +33,24 @@
     δI::T = 1.0
     δD::T = 1.0
 
-   # CHECKS
-   @assert 0 < α <= 1
-   @assert A̅*h0 > 1
-   @assert h0 < 1
-   @assert h∞ < 1
-   @assert h0 < h∞
-   @assert g0 < 1
-   @assert g∞ < 1
-   @assert g0 < g∞
-   @assert θ1 < 1
-   @assert θ2 < 1
-   @assert 0 < δI <= 1
-   @assert δD >= 1
-   @assert gθ_isConcave(g0,g∞,θ2)
+    # Derived
+    Φ::T = (ϕL / ρ + (1-ϕL) * ϕ0 / (ρ + ϕ))
+    gPrime0::T = g∞ - g0
+
+    # CHECKS
+    @assert 0 < α <= 1
+    @assert A̅*h0 > 1
+    @assert h0 < 1
+    @assert h∞ < 1
+    @assert h0 < h∞
+    @assert g0 < 1
+    @assert g∞ < 1
+    @assert g0 < g∞
+    @assert θ1 < 1
+    @assert θ2 < 1
+    @assert 0 < δI <= 1
+    @assert δD >= 1
+    @assert gθ_isConcave(g0,g∞,θ2)
 
 end
 

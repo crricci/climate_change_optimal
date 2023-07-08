@@ -1,9 +1,9 @@
-function optimNash(p; TOL = 1e-16, MAX_IT = 1e6, quiet = false)
+function optimNash(p; TOL = 1e-16, MAX_IT = 1e6, quiet = true)
     # by iterated best response
 
     
     # initial point by social planner optimum
-    solPlanner = optimPlanner(p; quiet = true)
+    solPlanner = optimPlanner(p; quiet = true, showObj = false)
     B2,I2 = solPlanner["B2"],solPlanner["I2"]
     
     C1,B1,I1,Ra,Rb = iterate1(p,B2,I2)
@@ -66,10 +66,8 @@ function iterate1(p,B2,I2)
     @NLconstraint(nash1Problem,BudgetConstraint,
     C1 + B1 + I1 + Ra + Rb ≤ p.A̅ * fI1)
 
-    Φ = (p.ϕL / p.ρ + (1-p.ϕL) * p.ϕ0 / (p.ρ + p.ϕ))
-
     # objective
-    @NLobjective(nash1Problem, Max, u1C1 - p.γ1 * Φ * GID)
+    @NLobjective(nash1Problem, Max, u1C1 - p.γ1 * p.Φ * GID)
 
     set_silent(nash1Problem)
     optimize!(nash1Problem)
@@ -115,10 +113,8 @@ function interate2(p,B1,I1,Ra,Rb)
     @NLconstraint(nash2Problem,BudgetConstraint,
     C2 + B2 + I2  ≤ p.A̅ * hRa * fI2)
 
-    Φ = (p.ϕL / p.ρ + (1-p.ϕL) * p.ϕ0 / (p.ρ + p.ϕ))
-
     # objective
-    @NLobjective(nash2Problem, Max, u2C2 -  p.γ2 * Φ * GID)
+    @NLobjective(nash2Problem, Max, u2C2 -  p.γ2 * p.Φ * GID)
 
     set_silent(nash2Problem)
     optimize!(nash2Problem)
