@@ -125,3 +125,59 @@ function interate2(p,B1,I1,Ra,Rb)
 
     return C2, B2, I2
 end
+
+function optimNashExplicit(p; quiet = true)
+
+    #check that we are in the case where there is an explicit solution 
+    @assert p.α == 1
+    @assert p.δD == 1
+    @assert p.δI == 1
+    @assert p.b̅ == 1
+
+    function computeRb(p; quiet = quiet)
+        RbProblem = Model(Ipopt.Optimizer)
+        set_optimizer_attribute(RbProblem, "tol", 1e-16)
+        JuMP.@variable(RbProblem, Rb ≥ 0)
+
+        @NLexpression(RbProblem, gRb, (p.g∞ * Rb + p.g0) / (Rb + 1))
+        @NLexpression(RbProblem, gPrimeRb, (p.g∞ - p.g0) / (Rb + 1)^2 )
+
+        @NLobjective(RbProblem, Min, 
+        (p.cI / p.cD - gRb^p.θ2 * gPrimeRb^(1-p.θ2) * p.θ2^p.θ2 * (p.A̅ - 1)^(1-p.θ2) * (p.A̅ * p.h0 - 1)^p.θ2)^2 )
+
+        # verbose
+        if quiet == false
+            unset_silent(RbProblem)
+        else
+            set_silent(RbProblem)
+        end
+
+        optimize!(RbProblem)
+        Rb = value(Rb); Rb = Rb < 0 ? 0 : Rb
+
+        return Rb
+    end
+
+    g(x) = (p.g∞ * x + p.g0) / (x+1)
+    
+    if p.cI / p.cD >= p.g0^p.θ2 * p.gPrime0^(1-p.θ2) * p.θ2^p.θ2 * (p.A̅ - 1)^(1-p.θ2) * (p.A̅ * p.h0 - 1)^p.θ2
+        println("Explicit condition for Rb = 0 matched")
+        Rb = 0 
+    else
+        Rb = computeRb(p; quiet = quiet)
+    end
+    B2 = (((p.cD * p.θ2 * g(Rb)) * (p.A̅ * p.h0 - 1)) / p.cI)^(1/(1 - p.θ2))
+    C1 = (p.γ1*p.Φ*p.cI/(p.A̅-1))^(-1/p.σ1)
+    B1 = (p.cI/(p.cD*p.θ1*(p.A̅-1)))^(1/(p.θ1-1))
+    Ra = 0
+    I1 = 1/(p.A̅ - 1) * (C1 + B1 + Rb)
+    C2 = (p.γ2*p.Φ*p.cI/(p.A̅*p.h0-1))^(-1/p.σ2)
+    I2 = 1/(p.A̅*p.h0 - 1) * (C2 + B2)
+    
+    solDict = Dict("C1" => C1, "C2" => C2, "Ra" => Ra, "Rb" => Rb,
+    "B1" => B1, "B2" => B2, "I1" => I1,"I2" => I2)
+    
+    return solDict
+ 
+end
+

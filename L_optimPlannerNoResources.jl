@@ -94,8 +94,6 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
         JuMP.@variable(RaRbProblem, Rb ≥ 0)
 
 
-        # \log\left(\dfrac{\overline{A}h(R_a)-1}{(\gamma_1+\gamma_2)\Phi\Lambda_I} \right)
-
         @NLexpression(RaRbProblem, gRb, (p.g∞ * Rb + p.g0) / (Rb + 1))
         @NLexpression(RaRbProblem, hRa, (p.h∞ * Ra + p.h0) / (Ra + 1))
         if p.σ2 == 1
