@@ -108,8 +108,9 @@ function optimPlannerExplicit(p; quiet = false)
     I1 = 1/(p.A̅ - 1) * (C1 + C2 + B1 + B2 + Rb)
     I2 = 0
 
-    solDict = Dict("C1" => C1, "C2" => C2, "Ra" => Ra, "Rb" => Rb,
-        "B1" => B1, "B2" => B2, "I1" => I1,"I2" => I2)
+    solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
+    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
+    solDict = Dict(zip(varNames,solValues))
 
     return solDict
 

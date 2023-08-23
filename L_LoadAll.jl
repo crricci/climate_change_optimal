@@ -6,6 +6,7 @@ using Parameters
 # Optimization
 using JuMP
 using Ipopt
+using ForwardDiff, FiniteDifferences
 
 # Output
 using PyPlot

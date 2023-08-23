@@ -7,14 +7,14 @@ function optimNash(p; TOL = 1e-16, MAX_IT = 1e6, quiet = true)
     B2,I2 = solPlanner["B2"],solPlanner["I2"]
     
     C1,B1,I1,Ra,Rb = iterate1(p,B2,I2)
-    C2, B2, I2 = interate2(p,B1,I1,Ra,Rb)
+    C2, B2, I2 = iterate2(p,B1,I1,Ra,Rb)
     candidateSol = [C1,C2,B1,B2,I1,I2,Ra,Rb]
 
     err = 1.0; Nit = 0
     while (err > TOL) & (Nit < MAX_IT)
         
         C1,B1,I1,Ra,Rb = iterate1(p,B2,I2)
-        C2, B2, I2 = interate2(p,B1,I1,Ra,Rb)
+        C2, B2, I2 = iterate2(p,B1,I1,Ra,Rb)
         
         err = norm(candidateSol - [C1,C2,B1,B2,I1,I2,Ra,Rb],Inf)
         Nit = Nit + 1 
@@ -79,7 +79,7 @@ function iterate1(p,B2,I2)
     return C1,B1,I1,Ra,Rb
 end
 
-function interate2(p,B1,I1,Ra,Rb)
+function iterate2(p,B1,I1,Ra,Rb)
 
     nash2Problem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(nash2Problem, "tol", 1e-16)
@@ -174,9 +174,10 @@ function optimNashExplicit(p; quiet = true)
     C2 = (p.γ2*p.Φ*p.cI/(p.A̅*p.h0-1))^(-1/p.σ2)
     I2 = 1/(p.A̅*p.h0 - 1) * (C2 + B2)
     
-    solDict = Dict("C1" => C1, "C2" => C2, "Ra" => Ra, "Rb" => Rb,
-    "B1" => B1, "B2" => B2, "I1" => I1,"I2" => I2)
-    
+    solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
+    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
+
+    solDict = Dict(zip(varNames,solValues))
     return solDict
  
 end
