@@ -70,7 +70,7 @@ function optimPlannerNoResources(p; quiet = true, start = nothing)
         set_silent(plannerNRProblem)
     end
 
-    optimize!(plannerNRProblem)
+    JuMP.optimize!(plannerNRProblem)
     println("Objective: ",objective_value(plannerNRProblem))
 
     solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
@@ -89,7 +89,7 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
 
     function computeRaRb(p; quiet = quiet)
         RaRbProblem = Model(Ipopt.Optimizer)
-        set_optimizer_attribute(RaRbProblem, "tol", 1e-16)
+        # set_optimizer_attribute(RaRbProblem, "tol", 1e-16)
         JuMP.@variable(RaRbProblem, Ra ≥ 0)
         JuMP.@variable(RaRbProblem, Rb ≥ 0)
 
@@ -113,7 +113,7 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
         else
             set_silent(RaRbProblem)
         end
-        optimize!(RaRbProblem)
+        JuMP.optimize!(RaRbProblem)
         Rb = value(Rb); Rb = Rb < 0 ? 0 : Rb
         Ra = value(Ra); Ra = Ra < 0 ? 0 : Ra
 

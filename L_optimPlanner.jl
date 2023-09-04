@@ -56,7 +56,7 @@ function optimPlanner(p; quiet = true, showObj = true)
         set_silent(plannerProblem)
     end
 
-    optimize!(plannerProblem)
+    JuMP.optimize!(plannerProblem)
     if showObj println("Objective: ",objective_value(plannerProblem)) end
     
     solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
@@ -87,7 +87,7 @@ function optimPlannerExplicit(p; quiet = false)
         else
             set_silent(RbProblem)
         end
-        optimize!(RbProblem)
+        JuMP.optimize!(RbProblem)
         Rb = value(Rb); Rb = Rb < 0 ? 0 : Rb
         return Rb
     end

@@ -5,7 +5,7 @@ using Parameters
 
 # Optimization
 using JuMP
-using Ipopt
+using Ipopt, NLopt
 using ForwardDiff, FiniteDifferences
 
 # Output

@@ -70,7 +70,7 @@ function iterate1(p,B2,I2)
     @NLobjective(nash1Problem, Max, u1C1 - p.γ1 * p.Φ * GID)
 
     set_silent(nash1Problem)
-    optimize!(nash1Problem)
+    JuMP.optimize!(nash1Problem)
     
     solValues = value.([C1,B1,I1,Ra,Rb])
     solValues[solValues .< 0] .= 0
@@ -117,7 +117,7 @@ function iterate2(p,B1,I1,Ra,Rb)
     @NLobjective(nash2Problem, Max, u2C2 -  p.γ2 * p.Φ * GID)
 
     set_silent(nash2Problem)
-    optimize!(nash2Problem)
+    JuMP.optimize!(nash2Problem)
 
     solValues = value.([C2, B2, I2])
     solValues[solValues .< 0] .= 0
@@ -152,7 +152,7 @@ function optimNashExplicit(p; quiet = true)
             set_silent(RbProblem)
         end
 
-        optimize!(RbProblem)
+        JuMP.optimize!(RbProblem)
         Rb = value(Rb); Rb = Rb < 0 ? 0 : Rb
 
         return Rb

@@ -18,7 +18,7 @@ function main(p)
     @show optimNashExplicit(p,quiet=true)
 
     # stackelberg
-    @show optimStackelberg(p,quiet=false)
+    @show optimStackelbergDual(p,quiet=false)
     @show optimStackelbergExplicit(p,quiet=true)
 
 end
