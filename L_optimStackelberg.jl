@@ -1,156 +1,9 @@
-function optimStackelberg(p; quiet = false)
-    
-    function Br2(x...)
 
-        B1v,I1v,Rav,Rbv = x
-
-        # Ipopt
-        Br2Problem = Model(Ipopt.Optimizer)
-        set_optimizer_attribute(Br2Problem, "tol", 1e-16)
-    
-        # NLopt
-        # Br2Problem = Model(NLopt.Optimizer);
-        # set_optimizer_attribute(Br2Problem, "algorithm", :GN_ORIG_DIRECT)
-        # set_optimizer_attribute(Br2Problem, "algorithm", :LN_COBYLA)
-
-        JuMP.@variables(Br2Problem, begin
-            C2 ≥ 0.0
-            B2 ≥ 0.0
-            I2 ≥ 0.0
-        end)
-
-        JuMP.@NLparameters(Br2Problem, begin
-            B1 == B1v 
-            I1 == I1v
-            Ra == Rav
-            Rb == Rbv
-        end) 
-    
-        # subexpressions
-        @NLexpressions(Br2Problem, begin
-        gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
-        hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
-        fI2, I2^p.α
-        D1, p.b̅ * B1^p.θ1
-        D2, p.b̅ * gRb * B2^p.θ2
-        I, I1 + I2
-        D, D1 + D2
-        GID, p.cI * I^p.δI - p.cD * D^p.δD
-        end)
-        
-        # utility
-        if p.σ2 == 1
-            @NLexpression(Br2Problem, u2C2, log(C2))
-        else
-            @NLexpression(Br2Problem, u2C2, C2^(1-p.σ2)/(1-p.σ2))
-        end
-    
-        # budget constraint
-        @NLconstraint(Br2Problem,BudgetConstraint,
-        C2 + B2 + I2  ≤ p.A̅ * hRa * fI2)
-    
-        # objective
-        @NLobjective(Br2Problem, Max, u2C2 -  p.γ2 * p.Φ * GID)
-    
-        set_silent(Br2Problem)
-        JuMP.optimize!(Br2Problem)
-    
-        solValues = value.([C2, B2, I2])
-        solValues[solValues .< 0] .= 0
-        C2, B2, I2 = solValues
-    
-        return [C2, B2, I2]
-    end
-    
-    
-    Br2C2(x...) = Br2(x...)[1]
-    Br2B2(x...) = Br2(x...)[2]
-    Br2I2(x...) = Br2(x...)[3]
-
-    function ∇Br2C2!(g,x...)
-        g .= grad(central_fdm(8, 1; factor=1e8),Br2C2, x...)
-        return
-    end
-
-    function ∇Br2B2!(g,x...)
-        g .= grad(central_fdm(8, 1; factor=1e8),Br2B2, x...)
-        return
-    end
-
-    function ∇Br2I2!(g,x...)
-        g .= grad(central_fdm(8, 1; factor=1e8),Br2I2, x...)
-        return
-    end
-
-    # Ipopt
-    stackelbergProblem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(stackelbergProblem, "tol", 1e-16)
-    
-    # NLopt
-    # stackelbergProblem = Model(NLopt.Optimizer);
-    # set_optimizer_attribute(stackelbergProblem, "algorithm", :GN_ORIG_DIRECT)
-    # set_optimizer_attribute(stackelbergProblem, "algorithm", :LN_COBYLA)
-
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
-    JuMP.@variables(stackelbergProblem,begin
-        C1 ≥ 0.0
-        B1 ≥ 0.0
-        I1 ≥ 0.0
-        Ra ≥ 0.0
-        Rb ≥ 0.0
-    end)
-
-    register(stackelbergProblem, :Br2C2, 4, Br2C2, ∇Br2C2!)
-    register(stackelbergProblem, :Br2B2, 4, Br2B2, ∇Br2B2!)
-    register(stackelbergProblem, :Br2I2, 4, Br2I2, ∇Br2I2!)
-
-    @NLexpressions(stackelbergProblem, begin
-        gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
-        hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
-        fI1, I1^p.α
-        fI2, (Br2I2(B1,I1,Ra,Rb))^p.α
-        D1, p.b̅ * B1^p.θ1
-        D2, p.b̅ * gRb *  (Br2B2(B1,I1,Ra,Rb))^p.θ2
-        I, I1 + Br2I2(B1,I1,Ra,Rb)
-        D, D1 + D2
-        GID, p.cI * I^p.δI - p.cD * D^p.δD
-    end)
-
-    if p.σ1 == 1
-        @NLexpression(stackelbergProblem, u1C1, log(C1))
-    else
-        @NLexpression(stackelbergProblem, u1C1, C1^(1-p.σ1)/(1-p.σ1))
-    end
-
-    @NLconstraint(stackelbergProblem,BudgetConstraint1,
-    C1 + B1 + I1 + Ra + Rb ≤ p.A̅ * fI1 )
-
-    @NLobjective(stackelbergProblem, Max, u1C1 - p.γ1 * p.Φ * GID) 
-   
-    # verbose
-    if quiet == false
-        unset_silent(stackelbergProblem)
-    else
-        set_silent(stackelbergProblem)
-    end
-
-    JuMP.optimize!(stackelbergProblem)
-
-    C1v,B1v,I1v,Rav,Rbv = value.([C1,B1,I1,Ra,Rb])
-
-    C2v,B2v,I2v = Br2(B1v,I1v,Rav,Rbv)
-    solValues = [C1v,C2v,B1v,B2v,I1v,I2v,Rav,Rbv]    
-    solValues[solValues .< 0] .= 0
-
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
-    solDict = Dict(zip(varNames,solValues))
-    return solDict
-end
-
-function optimStackelbergDual(p; quiet = true)
+function optimStackelberg(p; quiet = true, showObj = false)
 
     stackelbergProblem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(stackelbergProblem, "tol", 1e-16)
+    set_optimizer_attribute(stackelbergProblem, "max_iter", Int(1e4))
 
     JuMP.@variables(stackelbergProblem, begin
     C1 ≥ 0.0
@@ -216,7 +69,7 @@ function optimStackelbergDual(p; quiet = true)
 
     # complementary slackness
     # regularization
-    t = 1e-10
+    t = 1e-16
     @NLconstraints(stackelbergProblem, begin
     μC2 * ( - C2) ≥ -t
     μB2 * ( - B2) ≥ -t
@@ -240,9 +93,8 @@ function optimStackelbergDual(p; quiet = true)
     end
 
     JuMP.optimize!(stackelbergProblem)
-    println("Objective: ",objective_value(stackelbergProblem))
+    if showObj println("Objective: ",objective_value(stackelbergProblem)) end
 
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
     solValues[solValues .< 0] .= 0
     solDict = Dict(zip(varNames,solValues))
@@ -267,15 +119,19 @@ function optimStackelbergExplicit(p; quiet = true)
 
         @NLexpression(RaRbProblem, gRb, (p.g∞ * Rb + p.g0) / (Rb + 1))
         @NLexpression(RaRbProblem, hRa, (p.h∞ * Ra + p.h0) / (Ra + 1))
-        if p.σ2 == 1
-            @NLobjective(RaRbProblem, Max, 
-            1/((p.γ1+p.γ2)*p.Φ)*log((p.A̅*hRa - 1)/((p.γ1+p.γ2)*p.Φ*p.cI)) + 
-            (1-p.θ2)*p.cD*gRb * (p.cI/ ((p.cD * p.θ2 * gRb) * (p.A̅*hRa - 1)))^(p.θ2/(p.θ2 - 1)) - p.cI/(p.A̅-1)*(Ra+Rb) )
-        else
+
+        # most likely the formula for sigma2 = 1 is wrong
+        # the one for sigma2 != 1 is corect, seems also for sigma2 = 1
+        
+        # if p.σ2 == 1
+            # @NLobjective(RaRbProblem, Max, 
+            # 1/((p.γ1+p.γ2)*p.Φ)*log((p.A̅*hRa - 1)/((p.γ1+p.γ2)*p.Φ*p.cI)) + 
+            # (1-p.θ2)*p.cD*gRb * (p.cI/ ((p.cD * p.θ2 * gRb) * (p.A̅*hRa - 1)))^(p.θ2/(p.θ2 - 1)) - p.cI/(p.A̅-1)*(Ra+Rb) )
+        # else
             @NLobjective(RaRbProblem, Max, 
             - p.cI/(p.A̅ - 1) * (Ra + Rb) - (p.cI/(p.A̅ * hRa - 1))^(1-1/p.σ2) * (p.γ2 * p.Φ)^(-1/p.σ2) + 
             (p.cI/(p.A̅ * hRa - 1))^(-p.θ2/(1-p.θ2)) * (p.cD * gRb)^(1/(1-p.θ2))*p.θ2^(p.θ2/(1-p.θ2))*(1-p.θ2) )
-        end
+        # end
 
         # verbose
         if quiet == false
@@ -307,10 +163,76 @@ function optimStackelbergExplicit(p; quiet = true)
 
     
     solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     solDict = Dict(zip(varNames,solValues))
     
     return solDict
  
 end
 
+function computeGStackelberg(p)
+
+    solDict = optimStackelberg(p; quiet = true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [solDict[name] for name in varNames]
+    return G(I1,I2,B1,B2,Rb,p)
+end
+
+function computeWelFare1Stackelberg(p,sol)
+
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+
+    # objective value
+    u1C1 = p.σ1 == 1 ? log(C1) : C1^(1-p.σ1)/(1-p.σ1)
+    gRb = (p.g∞ * Rb + p.g0) / (Rb + 1)
+    D1 = p.b̅ * B1^p.θ1
+    D2 = p.b̅ * gRb * B2^p.θ2
+    I = I1 + I2
+    D = D1 + D2
+    GID = p.cI * I^p.δI - p.cD * D^p.δD
+
+    obj = u1C1 - p.γ1 * p.Φ * GID
+
+    return obj
+end
+
+function computeWelFare2Stackelberg(p,sol)
+
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+
+    # objective value
+    u2C2 = p.σ2 == 1 ? log(C2) : C2^(1-p.σ2)/(1-p.σ2)
+    gRb = (p.g∞ * Rb + p.g0) / (Rb + 1)
+    D1 = p.b̅ * B1^p.θ1
+    D2 = p.b̅ * gRb * B2^p.θ2
+    I = I1 + I2
+    D = D1 + D2
+    GID = p.cI * I^p.δI - p.cD * D^p.δD
+
+    obj = u2C2 - p.γ2 * p.Φ * GID
+
+    return obj
+end
+
+function computeAllStackelberg()
+
+    sol = optimStackelberg(SOpG,quiet=true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+    GComputed = computeG(SOpG,sol)
+
+    solODE = solveODE(SOpG,DpG,GComputed)
+    P,T = solODE.u[end]
+    TempFinal = ComputeTemperature(DpG,P,T)
+    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+
+    ΔP = P - DpG.P0
+    ΔT = T - DpG.T0
+    ΔTemp = TempFinal - TempInitial
+
+    WelFare1 = computeWelFare1Stackelberg(SOpG,sol)
+    WelFare2 = computeWelFare2Stackelberg(SOpG,sol)
+    WelFare = WelFare1 + WelFare2
+    Y1 = SOpG.A̅ * I1^SOpG.α
+    Y2 = SOpG.A̅ * h(Ra,SOpG) * I2^SOpG.α
+
+    return C1,C2,B1,B2,I1,I2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
+
+end

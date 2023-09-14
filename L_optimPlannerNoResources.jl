@@ -1,10 +1,9 @@
 
-function optimPlannerNoResources(p; quiet = true, start = nothing)
+function optimPlannerNoResources(p; quiet = true, start = nothing, showObj = false)
     
     plannerNRProblem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(plannerNRProblem, "tol", 1e-16)
 
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     JuMP.@variables(plannerNRProblem,begin
         C1 ≥ 0.0
         C2 ≥ 0.0
@@ -71,11 +70,13 @@ function optimPlannerNoResources(p; quiet = true, start = nothing)
     end
 
     JuMP.optimize!(plannerNRProblem)
-    println("Objective: ",objective_value(plannerNRProblem))
-
+    
     solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
     solValues[solValues .< 0] .= 0
     solDict = Dict(zip(varNames,solValues))
+
+    if showObj println("Objective: ",computeWelFarePlannerNoResources(p,solDict)) end
+    
     return solDict
 end
 
@@ -133,18 +134,24 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
 
     
     solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     solDict = Dict(zip(varNames,solValues))
 
-    println("Objective: ", objectiveValuePlannerNoResources(p,solDict))
+    # println("Objective: ", computeWelFarePlannerNoResources(p,solDict))
     
     return solDict
  
 end
 
-function objectiveValuePlannerNoResources(p,sol)
+function computeGPlannerNoResources(p)
 
-        B1, B2, C1, C2, I1, I2, Ra, Rb = values(sort(sol))
+    solDict = optimPlannerNoResources(p; quiet = true, showObj = false)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [solDict[name] for name in varNames]
+    return G(I1,I2,B1,B2,Rb,p)
+end
+
+function computeWelFarePlannerNoResources(p,sol)
+
+        C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
 
         # objective value
         u1C1 = p.σ1 == 1 ? log(C1) : C1^(1-p.σ1)/(1-p.σ1)
@@ -160,4 +167,32 @@ function objectiveValuePlannerNoResources(p,sol)
         obj = u1C1 + u2C2 - (p.γ1+p.γ2)*p.Φ*GID
 
         return obj
+end
+
+
+
+
+function computeAllPlannerNoResources()
+
+    sol = optimPlannerNoResources(SOpG,quiet=true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+    GComputed = computeG(SOpG,sol)
+
+
+    solODE = solveODE(SOpG,DpG,GComputed)
+    P,T = solODE.u[end]
+    TempFinal = ComputeTemperature(DpG,P,T)
+    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+
+    ΔP = P - DpG.P0
+    ΔT = T - DpG.T0
+    ΔTemp = TempFinal - TempInitial
+
+    WelFare = computeWelFarePlannerNoResources(SOpG,sol)
+    Y1 = SOpG.A̅ * I1^SOpG.α
+    Y2 = SOpG.A̅ * h(Ra,SOpG) * I2^SOpG.α
+
+
+    return C1,C2,B1,B2,I1,I2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, NaN, NaN, Y1, Y2
+
 end

@@ -1,11 +1,10 @@
 
 
-function optimPlanner(p; quiet = true, showObj = true)
+function optimPlanner(p; quiet = true, showObj = false)
     
     plannerProblem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(plannerProblem, "tol", 1e-16)
 
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     JuMP.@variables(plannerProblem,begin
         C1 ≥ 0.0
         C2 ≥ 0.0
@@ -57,11 +56,13 @@ function optimPlanner(p; quiet = true, showObj = true)
     end
 
     JuMP.optimize!(plannerProblem)
-    if showObj println("Objective: ",objective_value(plannerProblem)) end
     
     solValues = value.([C1,C2,B1,B2,I1,I2,Ra,Rb])
     solValues[solValues .< 0] .= 0
     solDict = Dict(zip(varNames,solValues))
+
+    if showObj println("Objective: ",computeWelFarePlanner(p,solDict)) end
+
     return solDict
 end
 
@@ -109,16 +110,22 @@ function optimPlannerExplicit(p; quiet = false)
     I2 = 0
 
     solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
-    solDict = Dict(zip(varNames,solValues))
+        solDict = Dict(zip(varNames,solValues))
 
     return solDict
 
 end
 
-function objectiveValuePlanner(p,sol)
+function computeGPlanner(p)
 
-    B1, B2, C1, C2, I1, I2, Ra, Rb = values(sort(sol))
+    solDict = optimPlanner(p; quiet = true, showObj = false)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [solDict[name] for name in varNames]
+    return G(I1,I2,B1,B2,Rb,p)
+end
+
+function computeWelFarePlanner(p,sol)
+
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
 
     # objective value
     u1C1 = p.σ1 == 1 ? log(C1) : C1^(1-p.σ1)/(1-p.σ1)
@@ -134,4 +141,28 @@ function objectiveValuePlanner(p,sol)
     obj = u1C1 + u2C2 - (p.γ1+p.γ2)*p.Φ*GID
 
     return obj
+end
+
+function computeAllPlanner()
+
+    sol = optimPlanner(SOpG,quiet=true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+    GComputed = computeG(SOpG,sol)
+
+    solODE = solveODE(SOpG,DpG,GComputed)
+    P,T = solODE.u[end]
+    TempFinal = ComputeTemperature(DpG,P,T)
+    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+
+    ΔP = P - DpG.P0
+    ΔT = T - DpG.T0
+    ΔTemp = TempFinal - TempInitial
+
+    WelFare = computeWelFarePlanner(SOpG,sol)
+    Y1 = SOpG.A̅ * I1^SOpG.α
+    Y2 = SOpG.A̅ * h(Ra,SOpG) * I2^SOpG.α
+
+
+    return C1,C2,B1,B2,I1,I2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, NaN, NaN, Y1, Y2
+
 end

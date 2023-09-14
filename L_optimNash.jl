@@ -1,4 +1,4 @@
-function optimNash(p; TOL = 1e-16, MAX_IT = 1e6, quiet = true)
+function optimNash(p; TOL = 1e-6, MAX_IT = 1e6, quiet = true)
     # by iterated best response
 
     
@@ -24,7 +24,6 @@ function optimNash(p; TOL = 1e-16, MAX_IT = 1e6, quiet = true)
         if quiet == false @show err, Nit end
     end
     
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     solDict = Dict(zip(varNames,candidateSol))
 
     return solDict
@@ -175,10 +174,78 @@ function optimNashExplicit(p; quiet = true)
     I2 = 1/(p.A̅*p.h0 - 1) * (C2 + B2)
     
     solValues = [C1,C2,B1,B2,I1,I2,Ra,Rb]
-    varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
 
     solDict = Dict(zip(varNames,solValues))
     return solDict
  
 end
 
+function computeGNash(p)
+
+    solDict = optimNash(p; quiet = true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [solDict[name] for name in varNames]
+    return G(I1,I2,B1,B2,Rb,p)
+end
+
+function computeWelFare1Nash(p,sol)
+
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+
+    # objective value
+    u1C1 = p.σ1 == 1 ? log(C1) : C1^(1-p.σ1)/(1-p.σ1)
+    gRb = (p.g∞ * Rb + p.g0) / (Rb + 1)
+    D1 = p.b̅ * B1^p.θ1
+    D2 = p.b̅ * gRb * B2^p.θ2
+    I = I1 + I2
+    D = D1 + D2
+    GID = p.cI * I^p.δI - p.cD * D^p.δD
+
+    obj = u1C1 - p.γ1 * p.Φ * GID
+
+    return obj
+end
+
+function computeWelFare2Nash(p,sol)
+
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+
+    # objective value
+    u2C2 = p.σ2 == 1 ? log(C2) : C2^(1-p.σ2)/(1-p.σ2)
+    gRb = (p.g∞ * Rb + p.g0) / (Rb + 1)
+    D1 = p.b̅ * B1^p.θ1
+    D2 = p.b̅ * gRb * B2^p.θ2
+    I = I1 + I2
+    D = D1 + D2
+    GID = p.cI * I^p.δI - p.cD * D^p.δD
+
+    obj = u2C2 - p.γ2 * p.Φ * GID
+
+    return obj
+end
+
+
+function computeAllNash()
+
+    sol = optimNash(SOpG,quiet=true)
+    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
+    GComputed = computeG(SOpG,sol)
+
+
+    solODE = solveODE(SOpG,DpG,GComputed)
+    P,T = solODE.u[end]
+    TempFinal = ComputeTemperature(DpG,P,T)
+    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+
+    ΔP = P - DpG.P0
+    ΔT = T - DpG.T0
+    ΔTemp = TempFinal - TempInitial
+
+    WelFare1 = computeWelFare1Nash(SOpG,sol)
+    WelFare2 = computeWelFare2Nash(SOpG,sol)
+    WelFare = WelFare1 + WelFare2
+    Y1 = SOpG.A̅ * I1^SOpG.α
+    Y2 = SOpG.A̅ * h(Ra,SOpG) * I2^SOpG.α
+
+    return C1,C2,B1,B2,I1,I2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
+
+end

@@ -3,23 +3,36 @@
 
 include("L_LoadAll.jl")
 
-function main(p)
+SOpG = climateSOParameters()
+DpG = climateDynamicParameters()
+
+function testSO()
 
     # planner
-    @show optimPlanner(p,quiet=true)
-    @show optimPlannerExplicit(p,quiet=true)
+    @show optimPlanner(SOpG,quiet=true)
+    @show optimPlannerExplicit(SOpG,quiet=true)
 
     # restricted planner
-    @show optimPlannerNoResources(p,quiet=true)
-    @show optimPlannerNoResourcesExplicit(p,quiet=true)
+    @show optimPlannerNoResources(SOpG,quiet=true)
+    @show optimPlannerNoResourcesExplicit(SOpG,quiet=true)
 
     # nash
-    @show optimNash(p,quiet=true)
-    @show optimNashExplicit(p,quiet=true)
+    @show optimNash(SOpG,quiet=true)
+    @show optimNashExplicit(SOpG,quiet=true)
 
     # stackelberg
-    @show optimStackelbergDual(p,quiet=false)
-    @show optimStackelbergExplicit(p,quiet=true)
+    @show optimStackelberg(SOpG,quiet=true)
+    @show optimStackelbergExplicit(SOpG,quiet=true)
 
+    return nothing
+end
+
+function testG()
+
+    @show computeGPlanner(SOpG)
+    @show computeGPlannerNoResources(SOpG)
+    @show computeGNash(SOpG)
+    @show computeGStackelberg(SOpG)
+    return nothing
 end
 
