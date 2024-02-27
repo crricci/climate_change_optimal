@@ -1,21 +1,21 @@
 
-const varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
+const varNames = ["C1","C2","B1","B2","K1","K2","Ra","Rb"]
 
 @with_kw mutable struct climateSOParameters{T}
     # static optimization parameters
 
     # Production
-    α::T = 2/3
-    A̅::T = 1000.0
+    α::T = 1.0
+    A̅::T = 6.0
 
     # Utility
-    σ1::T = 2.0
-    σ2::T = 2.0
-    γ1::T = 25.0 
-    γ2::T = 25.0
-    # γ1::T = 1e-2
-    # γ2::T = 1e-2
-    ρ::T = 0.04
+    σ1::T = 1.2
+    σ2::T = 1.2
+    γ1::T = 15.0 * 1e-3 * 0.5
+    γ2::T = 35.0 * 1e-3 * 0.5
+    # γ1::T = 20.0 * 1e-3 * 0.5
+    # γ2::T = 20.0 * 1e-3 * 0.5
+    ρ::T = -log((0.96)^10)
 
     # Pollution
     ϕL::T = 0.2
@@ -25,17 +25,13 @@ const varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     # Depollution
     θ1::T = 0.5
     θ2::T = 0.5
-    cI::T = 10.0
-    cD::T = 0.001
+    ηK::T = 1.0
+    ηB::T = 1.0
 
-    h0::T = 1/3
+    h0::T = 0.5
     h∞::T = 0.9
-    g0::T = 0.5
-    g∞::T = 0.9
-
-    b̅::T = 1.0      # fixed t 1
-    δI::T = 1.0     # fixed to 1
-    δD::T = 1.0     # fixed to 1
+    g0::T = 0.2
+    g∞::T = 0.5
 
     # Derived
     Φ::T = (ϕL / ρ + (1-ϕL) * ϕ0 / (ρ + ϕ))
@@ -52,8 +48,7 @@ const varNames = ["C1","C2","B1","B2","I1","I2","Ra","Rb"]
     @assert g0 < g∞
     @assert θ1 < 1
     @assert θ2 < 1
-    @assert 0 < δI <= 1
-    @assert δD >= 1
+    # @assert 0 < δI <= 1
     @assert gθ_isConcave(g0,g∞,θ2)
 
 end
@@ -61,16 +56,25 @@ end
 
 @with_kw mutable struct climateDynamicParameters{T}    
     TInitial::T = 2000.0        # initial year
-    TSim::T = 100.0             # how mazny years to simulate
+    TSim::T = 20.0             # how many years to simulate
     TSave::LinRange{T,Int64} = LinRange(TInitial, TInitial+TSim, 1000)
     P0::T = 684.0               # permanent emission at time T0
     T0::T = 118.0               # temporary emission at time T0
     S̅::T = 581.0                # Preindustrial GHC
 end
 
-function G(I1,I2,B1,B2,Rb,p)
-    return p.cI * (I1+I2)^p.δI - p.cD * (p.b̅ * B1^p.θ1 + p.b̅ * g(Rb,p) * B2^p.θ2)^p.δD
+function G(K1,K2,B1,B2,Rb,p)
+    return p.ηK * (K1+K2) - p.ηB * (B1^p.θ1 + g(Rb,p) * B2^p.θ2)
 end
+
+function G1(K1,B1,p)
+    return p.ηK * K1 - p.ηB * ( B1^p.θ1 )
+end
+
+function G2(K2,B2,Rb,p)
+    return p.ηK * K2 - p.ηB * ( g(Rb,p) * B2^p.θ2 )
+end
+
 
 function g(x,p)
     return (p.g∞ * x + p.g0)/(x+1)
@@ -81,10 +85,20 @@ function h(x,p)
 end
 
 function computeG(p,sol)
-
-    C1,C2,B1,B2,I1,I2,Ra,Rb = [sol[name] for name in varNames]
-    return G(I1,I2,B1,B2,Rb,p)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
+    return G(K1,K2,B1,B2,Rb,p)
 end
+
+function computeG1(p,sol)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
+    return G1(K1,B1,p)
+end
+
+function computeG2(p,sol)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
+    return G2(K2,B2,Rb,p)
+end
+
 
 function gθ_isConcave(g0,g∞,θ)
 
@@ -102,3 +116,6 @@ function gθ_isConcave(g0,g∞,θ)
     end
 end
 
+function print_rgb(r, g, b, t)
+    print("\e[1m\e[38;2;$r;$g;$b;249m",t)
+end

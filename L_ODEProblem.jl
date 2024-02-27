@@ -22,20 +22,36 @@ function df!(du,u,p,t)
 end
 
 function ComputeTemperature(Dp, P,T)
-    return 3*log(2) * log((P+T)/Dp.S̅)
+    return 3/log(2) * log((P+T)/Dp.S̅)
 end
 
+function splitInitialData(Dp,G1,G2)
 
-function solveModelTemp()
+    Dp1 = deepcopy(DpG)
+    Dp2 = deepcopy(DpG)
 
-    computeGPlanner(SOpG)
-    # computeGPlannerNoResources(SOpG)
-    # computeGNash(SOpG)
-    # computeGStackelberg(SOpG)
+    Dp1.P0 = Dp.P0 / 2
+    Dp2.P0 = Dp.P0 / 2
 
-    P,T = solveODE(SOpG,DpG,GComputed)
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
-    ΔTemp = TempFinal - TempInitial
+    Dp1.T0 = Dp.T0 / 2
+    Dp2.T0 = Dp.T0 / 2
+    
+
+    # if (G1 > 0) & (G2 > 0 )
+    #     Dp1.P0 = Dp.P0 * G1 / (G1+G2) 
+    #     Dp1.T0 = Dp.T0 * G1 / (G1+G2) 
+    #     Dp2.P0 = Dp.P0 * G2 / (G1+G2) 
+    #     Dp2.T0 = Dp.T0 * G2 / (G1+G2) 
+    # elseif (G1 > 0) & (G2 < 0)
+    #     Dp2.P0 = 0.0
+    #     Dp2.T0 = 0.0
+    # elseif (G1 < 0) & (G2 > 0)
+    #     Dp1.P0 = 0.0
+    #     Dp1.T0 = 0.0
+    # else
+    #     error("G total cannot be negative")
+    # end
+
+    return Dp1,Dp2 
+    
 end
-
