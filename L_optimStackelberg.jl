@@ -2,9 +2,9 @@
 function optimStackelberg(p; quiet = true, showObj = false)
 
     stackelbergProblem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(stackelbergProblem, "tol", 1e-32)
-    set_optimizer_attribute(stackelbergProblem, "acceptable_tol",  1e-32)
-    set_optimizer_attribute(stackelbergProblem, "max_iter", Int(1e6))
+    set_optimizer_attribute(stackelbergProblem, "tol", GLOBAL_TOL)
+    set_optimizer_attribute(stackelbergProblem, "acceptable_tol",  GLOBAL_TOL)
+    set_optimizer_attribute(stackelbergProblem, "max_iter", GLOBAL_MAX_IT)
 
     JuMP.@variables(stackelbergProblem, begin
     C1 ≥ 0.0
@@ -36,7 +36,7 @@ function optimStackelberg(p; quiet = true, showObj = false)
     GID, p.ηK * K - p.ηB * D
     # derivatives for inner problem
     ∂u2partialC2, 1/C2^p.σ2
-    ∂G∂B2, -p.ηB * p.b̅ * gRb * p.θ2 * B2^(p.θ2-1)
+    ∂G∂B2, -p.ηB * gRb * p.θ2 * B2^(p.θ2-1)
     ∂G∂K2, p.ηK
     ∂fK2∂K2, p.α * K2^(p.α-1)
     end)

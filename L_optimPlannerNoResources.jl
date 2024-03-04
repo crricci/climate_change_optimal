@@ -2,9 +2,9 @@
 function optimPlannerNoResources(p; quiet = true, start = nothing, showObj = false)
     
     plannerNRProblem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(plannerNRProblem, "tol", 1e-32)
-    set_optimizer_attribute(plannerNRProblem, "acceptable_tol",  1e-32)
-    set_optimizer_attribute(plannerNRProblem, "max_iter", Int(1e6))
+    set_optimizer_attribute(plannerNRProblem, "tol", GLOBAL_TOL)
+    set_optimizer_attribute(plannerNRProblem, "acceptable_tol",  GLOBAL_TOL)
+    set_optimizer_attribute(plannerNRProblem, "max_iter", GLOBAL_MAX_IT)
 
     JuMP.@variables(plannerNRProblem,begin
         C1 ≥ 0.0
@@ -143,6 +143,87 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
     
     return solDict
  
+end
+
+function optimPlannerNoResourcesRobust(SOp, Dp; quiet = false)
+
+    SOpInner = deepcopy(SOp)
+
+    #check that we are in the case where there is a soluton, i.e. AK log case
+    @assert SOpInner.α == 1
+    @assert SOpInner.σ1 == 1
+    @assert SOpInner.σ2 == 1
+
+    candidateSol = optimPlannerNoResourcesExplicit(SOpInner,quiet=true)
+    γ1 = 0.0
+    γ2 = 0.0
+    
+    err = 1.0; Nit = 0
+    while (err > GLOBAL_TOL) & (Nit < GLOBAL_MAX_IT)
+        
+        candidateSolPre = candidateSol
+        γ1Pre = SOpInner.γ1 
+        γ2Pre = SOpInner.γ2
+
+        γ1,γ2 = bestResponseNatureNoResources(SOpInner,Dp,candidateSolPre; quiet = true)
+        SOpInner.γ1 = γ1
+        SOpInner.γ2 = γ2
+        candidateSol = optimPlannerNoResourcesExplicit(SOpInner,quiet=true)
+
+        err = norm([γ1,γ2,[candidateSol[name] for name in varNames]...] - [γ1Pre,γ2Pre,[candidateSolPre[name] for name in varNames]...],Inf)
+        Nit = Nit + 1 
+
+        if quiet == false @show err, Nit end
+    end
+
+
+    if Nit == GLOBAL_MAX_IT
+        printstyled("nashProblem -> maximum iteration reached" * "\n",color=:red)
+    end
+
+    solValues = [candidateSol[name] for name in varNames]
+    solDict = Dict(zip(varNames,solValues))
+
+    return solDict, γ1, γ2
+
+end
+
+function bestResponseNatureNoResources(SOp,Dp,sol; quiet = false)
+
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
+    g(x) = (SOp.g∞ * x + SOp.g0) / (x+1)
+    h(x) = (SOp.h∞ * x + SOp.h0) / (x+1)
+
+    RobustProblem = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(RobustProblem, "tol", GLOBAL_TOL)
+
+    JuMP.@variables(RobustProblem, begin
+    γ1o ≥ 0
+    γ2o ≥ 0
+    end)
+
+    @NLexpression(RobustProblem, hRa, (SOp.h∞ * Ra + SOp.h0) / (Ra+1))
+
+    Λ1 = (Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ)) +
+    - SOp.Φ*SOp.ηK/SOp.ρ * (Ra+Rb+B1+B2) + 
+    + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + g(Rb)*B2^SOp.θ2)
+
+    @NLobjective(RobustProblem, Min,
+    1/SOp.ρ*log( (SOp.A̅-1) / ((γ1o+γ2o)*SOp.Φ*SOp.ηK) * (hRa*SOp.A̅-1) / ((γ1o+γ2o)*SOp.Φ*SOp.ηK) ) + 
+    +(γ1o + γ2o) * Λ1 + hRa*SOp.A̅ + SOp.αR/SOp.ρ*((γ1o-SOp.γ̂1)^2 + (γ2o-SOp.γ̂2)^2) )
+    
+    # verbose
+    if quiet == false
+        unset_silent(RobustProblem)
+    else
+        set_silent(RobustProblem)
+    end
+    JuMP.optimize!(RobustProblem)
+
+    γ1, γ2 = value.([γ1o,γ2o])
+    
+    return γ1, γ2
+
 end
 
 function computeGPlannerNoResources(p)

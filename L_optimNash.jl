@@ -1,30 +1,32 @@
-function optimNash(p; TOL = 1e-6, MAX_IT = 1e6, quiet = true)
+function optimNash(p; TOL = GLOBAL_TOL, MAX_IT = GLOBAL_MAX_IT, quiet = true)
     # by iterated best response
 
-    
     # initial point by social planner optimum
     solPlanner = optimPlanner(p; quiet = true, showObj = false)
     B2,K2 = solPlanner["B2"],solPlanner["K2"]
     
-    C1,B1,K1,Ra,Rb = iterate1(p,B2,K2)
-    C2, B2, K2 = iterate2(p,B1,K1,Ra,Rb)
+    C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2)
+    C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb)
     candidateSol = [C1,C2,B1,B2,K1,K2,Ra,Rb]
 
     err = 1.0; Nit = 0
-    while (err > TOL) & (Nit < MAX_IT)
+    while (err > GLOBAL_TOL) & (Nit < GLOBAL_MAX_IT)
         
-        C1,B1,K1,Ra,Rb = iterate1(p,B2,K2)
-        C2, B2, K2 = iterate2(p,B1,K1,Ra,Rb)
+        C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2)
+        C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb)
         
         err = norm(candidateSol - [C1,C2,B1,B2,K1,K2,Ra,Rb],Inf)
         Nit = Nit + 1 
 
         candidateSol = [C1,C2,B1,B2,K1,K2,Ra,Rb]
         
-        if quiet == false @show err, Nit end
+        if quiet == false 
+            print("Nash Case: ")
+            @show err, Nit
+         end
     end
     
-    if Nit == MAX_IT
+    if Nit == GLOBAL_MAX_IT
         printstyled("nashProblem -> maximum iteration reached" * "\n",color=:red)
     end
 
@@ -33,12 +35,12 @@ function optimNash(p; TOL = 1e-6, MAX_IT = 1e6, quiet = true)
     return solDict
 end
 
-function iterate1(p,B2,K2)
+function NashNation1(p,B2,K2)
 
     nash1Problem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(nash1Problem, "tol", 1e-32)
-    set_optimizer_attribute(nash1Problem, "acceptable_tol",  1e-32)
-    set_optimizer_attribute(nash1Problem, "max_iter", Int(1e6))
+    set_optimizer_attribute(nash1Problem, "tol", GLOBAL_TOL)
+    set_optimizer_attribute(nash1Problem, "acceptable_tol",  GLOBAL_TOL)
+    set_optimizer_attribute(nash1Problem, "max_iter", GLOBAL_MAX_IT)
 
     JuMP.@variables(nash1Problem,begin
         C1 ≥ 0.0
@@ -84,12 +86,12 @@ function iterate1(p,B2,K2)
     return C1,B1,K1,Ra,Rb
 end
 
-function iterate2(p,B1,K1,Ra,Rb)
+function NashNation2(p,B1,K1,Ra,Rb)
 
     nash2Problem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(nash2Problem, "tol", 1e-32)
-    set_optimizer_attribute(nash2Problem, "acceptable_tol",  1e-32)
-    set_optimizer_attribute(nash2Problem, "max_iter", Int(1e6))
+    set_optimizer_attribute(nash2Problem, "tol", GLOBAL_TOL)
+    set_optimizer_attribute(nash2Problem, "acceptable_tol",  GLOBAL_TOL)
+    set_optimizer_attribute(nash2Problem, "max_iter", GLOBAL_MAX_IT)
 
     JuMP.@variables(nash2Problem,begin
         C2 ≥ 0.0
@@ -165,7 +167,9 @@ function optimNashExplicit(p; quiet = true)
     g(x) = (p.g∞ * x + p.g0) / (x+1)
     
     if p.ηK / p.ηB >= p.g0^p.θ2 * p.gPrime0^(1-p.θ2) * p.θ2^p.θ2 * (p.A̅ - 1)^(1-p.θ2) * (p.A̅ * p.h0 - 1)^p.θ2
-        println("Explicit condition for Rb = 0 matched")
+        if quiet == false
+            println("Explicit condition for Rb = 0 matched")
+        end
         Rb = 0 
     else
         Rb = computeRb(p; quiet = quiet)
@@ -186,7 +190,6 @@ function optimNashExplicit(p; quiet = true)
 end
 
 function computeGNash(p)
-
     solDict = optimNash(p; quiet = true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [solDict[name] for name in varNames]
     return G(K1,K2,B1,B2,Rb,p)

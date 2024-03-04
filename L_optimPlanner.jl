@@ -3,9 +3,9 @@
 function optimPlanner(p; quiet = true, showObj = false)
     
     plannerProblem = Model(Ipopt.Optimizer)
-    set_optimizer_attribute(plannerProblem, "tol", 1e-32)
-    set_optimizer_attribute(plannerProblem, "acceptable_tol",  1e-32)
-    set_optimizer_attribute(plannerProblem, "max_iter", Int(1e6))
+    set_optimizer_attribute(plannerProblem, "tol", GLOBAL_TOL)
+    set_optimizer_attribute(plannerProblem, "acceptable_tol",  GLOBAL_TOL)
+    set_optimizer_attribute(plannerProblem, "max_iter", GLOBAL_MAX_IT)
 
     JuMP.@variables(plannerProblem,begin
         C1 ≥ 0.0
@@ -79,7 +79,7 @@ function optimPlannerExplicit(p; quiet = false)
 
     function computeRb(p; quiet = quiet)
         RbProblem = Model(Ipopt.Optimizer)
-        set_optimizer_attribute(RbProblem, "tol", 1e-16)
+        set_optimizer_attribute(RbProblem, "tol", GLOBAL_TOL)
         JuMP.@variable(RbProblem, Rb ≥ 0)
 
         @NLexpression(RbProblem, gRb, (p.g∞ * Rb + p.g0) / (Rb + 1))
@@ -116,6 +116,87 @@ function optimPlannerExplicit(p; quiet = false)
         solDict = Dict(zip(varNames,solValues))
 
     return solDict
+
+end
+
+function optimPlannerRobust(SOp, Dp; quiet = false)
+
+    #check that we are in the case where there is a soluton, i.e. AK log case
+    @assert SOp.α == 1
+    @assert SOp.σ1 == 1
+    @assert SOp.σ2 == 1
+
+    function computeRb(p; quiet = quiet)
+        RbProblem = Model(Ipopt.Optimizer)
+        set_optimizer_attribute(RbProblem, "tol", GLOBAL_TOL)
+        JuMP.@variable(RbProblem, Rb ≥ 0)
+
+        @NLexpression(RbProblem, gRb, (SOp.g∞ * Rb + SOp.g0) / (Rb + 1))
+        @NLobjective(RbProblem, Max, -Rb + gRb^(1/(1-SOp.θ2)) * (SOp.θ2 / (SOp.ηK / ((SOp.A̅ - 1) * SOp.ηB)))^(1/(1-SOp.θ2)) * (1/SOp.θ2 - 1) )
+
+        # verbose
+        if quiet == false
+            unset_silent(RbProblem)
+        else
+            set_silent(RbProblem)
+        end
+        JuMP.optimize!(RbProblem)
+        Rb = value(Rb); Rb = Rb < 0 ? 0 : Rb
+        return Rb
+    end
+
+    Ra = 0
+    if SOp.ηK / SOp.ηB >= SOp.g0^SOp.θ2 * SOp.gPrime0^(1-SOp.θ2) * SOp.θ2^SOp.θ2 * (SOp.A̅ - 1)
+        println("Explicit condition for Rb = 0 matched")
+        Rb = 0 
+    else
+        Rb = computeRb(p; quiet = quiet)
+    end
+
+    g(x) = (SOp.g∞ * x + SOp.g0) / (x+1)
+    B1 = (SOp.ηB/SOp.ηK * SOp.θ1 * (SOp.A̅ - 1))^(1/(1-SOp.θ1))
+    B2 = (SOp.ηB/SOp.ηK * SOp.θ2 * g(Rb) * (SOp.A̅ - 1))^(1/(1-SOp.θ2))
+    
+    function computeγ̂1γ̂2(SOp, Dp; quiet = quiet)
+        RobustProblem = Model(Ipopt.Optimizer)
+        set_optimizer_attribute(RobustProblem, "tol", GLOBAL_TOL)
+
+        JuMP.@variables(RobustProblem, begin
+        γ1o ≥ 0
+        γ2o ≥ 0
+        end)
+
+        Γ1 = (Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ)) +
+        - SOp.Φ*SOp.ηK/SOp.ρ * (Rb+B1+B2) + 
+        + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + g(Rb)*B2^SOp.θ2)
+        
+        @NLobjective(RobustProblem, Min,
+        2/SOp.ρ*log( (SOp.A̅-1) / ((γ1o+γ2o)*SOp.Φ*SOp.ηK) ) + (γ1o+γ2o)*Γ1
+        + SOp.αR/SOp.ρ*((γ1o-SOp.γ̂1)^2 + (γ2o-SOp.γ̂2)^2) )
+        
+        # verbose
+        if quiet == false
+            unset_silent(RobustProblem)
+        else
+            set_silent(RobustProblem)
+        end
+        JuMP.optimize!(RobustProblem)
+        
+        γ1, γ2 = value.([γ1o,γ2o])
+        return γ1,γ2
+    end
+
+    γ1,γ2 = computeγ̂1γ̂2(SOp, Dp; quiet = quiet)
+
+    C1 = ( (SOp.A̅-1)/((γ1+γ2)*SOp.Φ*SOp.ηK) )^(1/SOp.σ1)
+    C2 = ( (SOp.A̅-1)/((γ1+γ2)*SOp.Φ*SOp.ηK) )^(1/SOp.σ2)
+    K1 = 1/(SOp.A̅ - 1) * (C1 + C2 + B1 + B2 + Rb)
+    K2 = 0
+
+    solValues = [C1,C2,B1,B2,K1,K2,Ra,Rb]
+    solDict = Dict(zip(varNames,solValues))
+
+    return solDict, γ1, γ2
 
 end
 
@@ -181,8 +262,6 @@ function computeWelFare2Planner(p,sol)
 
     return obj
 end
-
-
 
 function computeAllPlanner()
 

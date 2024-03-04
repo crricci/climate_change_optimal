@@ -1,5 +1,7 @@
 
 const varNames = ["C1","C2","B1","B2","K1","K2","Ra","Rb"]
+const GLOBAL_TOL = 1e-16
+const GLOBAL_MAX_IT = Int(1e6)
 
 @with_kw mutable struct climateSOParameters{T}
     # static optimization parameters
@@ -9,13 +11,19 @@ const varNames = ["C1","C2","B1","B2","K1","K2","Ra","Rb"]
     A̅::T = 6.0
 
     # Utility
-    σ1::T = 1.2
-    σ2::T = 1.2
+    σ1::T = 1.0
+    σ2::T = 1.0
     γ1::T = 15.0 * 1e-3 * 0.5
     γ2::T = 35.0 * 1e-3 * 0.5
     # γ1::T = 20.0 * 1e-3 * 0.5
     # γ2::T = 20.0 * 1e-3 * 0.5
     ρ::T = -log((0.96)^10)
+
+    # robustness    
+    γ̂1::T = γ1      # gamma1 nature
+    γ̂2::T = γ2      # gamma2 nature
+    αR::T = 1e5     # alpha nature (alpha1 = alpha2)
+    # αR::T = 1e4         # alpha nature (alpha1 = alpha2)
 
     # Pollution
     ϕL::T = 0.2
