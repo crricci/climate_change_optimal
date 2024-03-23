@@ -3,6 +3,21 @@ const varNames = ["C1","C2","B1","B2","K1","K2","Ra","Rb"]
 const GLOBAL_TOL = 1e-16
 const GLOBAL_MAX_IT = Int(1e6)
 
+const ALL_LINE_STYLES = [(0, (1, 10)),
+                        (0, (1, 1)),
+                        (5, (10, 3)),
+                        (0, (5, 10)),
+                        (0, (5, 5)),
+                        (0, (5, 1)),
+                        (0, (3, 10, 1, 10)),
+                        (0, (3, 5, 1, 5)),
+                        (0, (3, 1, 1, 1)),
+                        (0, (3, 5, 1, 5, 1, 5)),
+                        (0, (3, 10, 1, 10, 1, 10)),
+                        (0, (3, 1, 1, 1, 1, 1))]
+
+
+
 @with_kw mutable struct climateSOParameters{T}
     # static optimization parameters
 
@@ -11,19 +26,21 @@ const GLOBAL_MAX_IT = Int(1e6)
     A̅::T = 6.0
 
     # Utility
-    σ1::T = 1.0
-    σ2::T = 1.0
-    γ1::T = 15.0 * 1e-3 * 0.5
-    γ2::T = 35.0 * 1e-3 * 0.5
-    # γ1::T = 20.0 * 1e-3 * 0.5
-    # γ2::T = 20.0 * 1e-3 * 0.5
+    σ1::T = 1.2
+    σ2::T = 1.2
+    # γ1::T = 15.0 * 1e-3 * 0.5
+    # γ2::T = 35.0 * 1e-3 * 0.5
+    γ1::T = 20.0 * 1e-3 * 0.5
+    γ2::T = 20.0 * 1e-3 * 0.5
     ρ::T = -log((0.96)^10)
 
     # robustness    
     γ̂1::T = γ1      # gamma1 nature
     γ̂2::T = γ2      # gamma2 nature
-    αR::T = 1e5     # alpha nature (alpha1 = alpha2)
+    # αR::T = 1e4     # alpha nature (alpha1 = alpha2)
     # αR::T = 1e4         # alpha nature (alpha1 = alpha2)
+    αR::T = 1e4         # alpha nature (alpha1 = alpha2)
+
 
     # Pollution
     ϕL::T = 0.2
@@ -63,7 +80,7 @@ end
 
 
 @with_kw mutable struct climateDynamicParameters{T}    
-    TInitial::T = 2000.0        # initial year
+    TInitial::T = 0.0        # initial year
     TSim::T = 20.0             # how many years to simulate
     TSave::LinRange{T,Int64} = LinRange(TInitial, TInitial+TSim, 1000)
     P0::T = 684.0               # permanent emission at time T0

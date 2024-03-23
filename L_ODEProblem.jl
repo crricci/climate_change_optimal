@@ -27,8 +27,8 @@ end
 
 function splitInitialData(Dp,G1,G2)
 
-    Dp1 = deepcopy(DpG)
-    Dp2 = deepcopy(DpG)
+    Dp1 = deepcopy(Dp)
+    Dp2 = deepcopy(Dp)
 
     Dp1.P0 = Dp.P0 / 2
     Dp2.P0 = Dp.P0 / 2

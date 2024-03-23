@@ -1,4 +1,4 @@
-function optimNashRobust(SOp,Dp; quiet = false)
+function optimNashRobustNumeric(SOp,Dp; quiet = false)
     SOpInner = deepcopy(SOp)
 
     #check that we are in the case where there is a soluton, i.e. AK log case

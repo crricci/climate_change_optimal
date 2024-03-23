@@ -9,20 +9,24 @@ DpG = climateDynamicParameters()
 function testSO()
 
     # planner
-    @show optimPlanner(SOpG,quiet=true)
-    @show optimPlannerExplicit(SOpG,quiet=true)
+    optimPlanner(SOpG,quiet=true)
+    optimPlannerExplicit(SOpG,quiet=true)
+    optimPlannerRobust(SOpG,DpG,quiet=true)[1]
 
     # restricted planner
-    @show optimPlannerNoResources(SOpG,quiet=true)
-    @show optimPlannerNoResourcesExplicit(SOpG,quiet=true)
+    optimPlannerNoResources(SOpG,quiet=true)
+    optimPlannerNoResourcesExplicit(SOpG,quiet=true)
+    optimPlannerNoResourcesRobust(SOpG,DpG,quiet=true)[1]
 
     # nash
-    @show optimNash(SOpG,quiet=true)
-    @show optimNashExplicit(SOpG,quiet=true)
+    optimNash(SOpG,quiet=true)
+    optimNashExplicit(SOpG,quiet=true)
+    optimNashRobust(SOpG,DpG,quiet=true)[1]
 
     # stackelberg
-    @show optimStackelberg(SOpG,quiet=true)
-    @show optimStackelbergExplicit(SOpG,quiet=true)
+    optimStackelberg(SOpG,quiet=true)
+    optimStackelbergExplicit(SOpG,quiet=true)
+    optimStackelbergRobust(SOpG,DpG,quiet=true)[1]
 
     return nothing
 end

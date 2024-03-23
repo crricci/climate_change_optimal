@@ -10,7 +10,7 @@ function optimNash(p; TOL = GLOBAL_TOL, MAX_IT = GLOBAL_MAX_IT, quiet = true)
     candidateSol = [C1,C2,B1,B2,K1,K2,Ra,Rb]
 
     err = 1.0; Nit = 0
-    while (err > GLOBAL_TOL) & (Nit < GLOBAL_MAX_IT)
+    while (err > GLOBAL_TOL) & (Nit < 50)
         
         C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2)
         C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb)
@@ -135,6 +135,106 @@ function NashNation2(p,B1,K1,Ra,Rb)
     return C2, B2, K2
 end
 
+function optimNashRobust(SOp,Dp; quiet = true)
+    SOpInner = deepcopy(SOp)
+
+    #check that we are in the case where there is a soluton, i.e. AK log case
+    @assert SOp.α == 1
+    @assert SOp.σ1 == 1
+    @assert SOp.σ2 == 1
+
+    # initialization
+    γ1 = SOpInner.γ1
+    γ2 = SOpInner.γ2
+    solNashStart = optimNashExplicit(SOpInner; quiet = true)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [solNashStart[name] for name in varNames]
+
+    err = 1.0; Nit = 0
+    while (err > GLOBAL_TOL) & (Nit < 50)
+        
+        γ1Pre,γ2Pre = γ1,γ2 
+
+        γ1 = NashRobustNation1gamma1(SOpInner,Dp,B1,B2,Rb,γ2)
+        γ2 = NashRobusNation2gamma2(SOpInner,Dp,B1,B2,Rb,γ1)
+        
+        err = norm([γ1,γ2] - [γ1Pre,γ2Pre],Inf)
+        Nit = Nit + 1 
+
+        if quiet == false 
+            print("Nash Case: ")
+            @show err, Nit
+         end
+    end
+    
+    if Nit == GLOBAL_MAX_IT
+        printstyled("nashProblem -> maximum iteration reached" * "\n",color=:red)
+    end
+
+    # after finding the correct gamma recompute the strategies of the nations 
+    SOpInner.γ1 = γ1
+    SOpInner.γ2 = γ2
+    solNash = optimNashExplicit(SOpInner; quiet = true)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [solNash[name] for name in varNames]
+
+    solDict = Dict(zip(varNames,[C1,C2,B1,B2,K1,K2,Ra,Rb]))
+    return solDict, γ1, γ2
+end
+
+function NashRobustNation1gamma1(SOp,Dp,B1,B2,Rb,γ2)
+
+    g(x) = (SOp.g∞ * x + SOp.g0) / (x+1)
+
+    RobustProblem = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(RobustProblem, "tol", GLOBAL_TOL)
+    set_silent(RobustProblem)
+
+    JuMP.@variables(RobustProblem, begin
+    γ1o ≥ 0
+    end)
+   
+    @NLexpression(RobustProblem, gRb, (SOp.g∞ * Rb + SOp.g0) / (Rb + 1))
+    @NLexpression(RobustProblem, K2, 1/(SOp.A̅*SOp.h0-1) * ((SOp.A̅*SOp.h0-1) / (γ2*SOp.Φ*SOp.ηK) + B2) )
+
+    @NLobjective(RobustProblem, Min,
+    γ1o * (Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ) +
+    - SOp.ηK*SOp.Φ/SOp.ρ * ((B1+Rb)/(SOp.A̅-1)+K2) + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + gRb*B2^SOp.θ2)) +
+    SOp.αR/SOp.ρ*(γ1o-SOp.γ̂1)^2 + 1/SOp.ρ*log((SOp.A̅-1)/(γ1o*SOp.Φ*SOp.ηK)) - 1/SOp.ρ)
+
+    JuMP.optimize!(RobustProblem)
+
+    γ1 = value(γ1o)
+    
+    return γ1
+end
+
+function NashRobusNation2gamma2(SOp,Dp,B1,B2,Rb,γ1)
+
+    g(x) = (SOp.g∞ * x + SOp.g0) / (x+1)
+
+    RobustProblem = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(RobustProblem, "tol", GLOBAL_TOL)
+    set_silent(RobustProblem)
+
+    JuMP.@variables(RobustProblem, begin
+    γ2o ≥ 0
+    end)
+   
+    @NLexpression(RobustProblem, gRb, (SOp.g∞ * Rb + SOp.g0) / (Rb + 1))
+    @NLexpression(RobustProblem, K1, 1/(SOp.A̅-1) * ((SOp.A̅-1) / (γ1*SOp.Φ*SOp.ηK) + B1 + Rb))
+
+    @NLobjective(RobustProblem, Min,
+    γ2o * (Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ) +
+    - SOp.ηK*SOp.Φ/SOp.ρ * (K1 + B2/(SOp.A̅*SOp.h0-1)) + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + gRb*B2^SOp.θ2)) +
+    SOp.αR/SOp.ρ*(γ2o-SOp.γ̂2)^2 + 1/SOp.ρ*log((SOp.A̅*SOp.h0-1)/(γ2o*SOp.Φ*SOp.ηK)) - 1/SOp.ρ)
+
+    JuMP.optimize!(RobustProblem)
+
+    γ2 = value(γ2o)
+    
+    return γ2
+end
+
+
 function optimNashExplicit(p; quiet = true)
 
     #check that we are in the case where there is an explicit solution 
@@ -232,57 +332,57 @@ function computeWelFare2Nash(p,sol)
 end
 
 
-function computeAllNash()
+function computeAllNash(SOp,Dp)
 
-    sol = optimNash(SOpG,quiet=true)
+    sol = optimNash(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
+    GComputed = computeG(SOp,sol)
 
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Nash(SOpG,sol)
-    WelFare2 = computeWelFare2Nash(SOpG,sol)
+    WelFare1 = computeWelFare1Nash(SOp,sol)
+    WelFare2 = computeWelFare2Nash(SOp,sol)
     WelFare = WelFare1 + WelFare2
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 
 
-function computeAllNashExplicit()
+function computeAllNashExplicit(SOp,Dp)
 
-    sol = optimNashExplicit(SOpG,quiet=true)
+    sol = optimNashExplicit(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
-    G1 = computeG1(SOpG,sol)
-    G2 = computeG2(SOpG,sol)
+    GComputed = computeG(SOp,sol)
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Nash(SOpG,sol)
-    WelFare2 = computeWelFare2Nash(SOpG,sol)
+    WelFare1 = computeWelFare1Nash(SOp,sol)
+    WelFare2 = computeWelFare2Nash(SOp,sol)
     WelFare = WelFare1 + WelFare2
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
-    gRb = g(Rb,SOpG)
-    hRa = h(Ra,SOpG)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa, GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 

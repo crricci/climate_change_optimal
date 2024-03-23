@@ -145,7 +145,7 @@ function optimPlannerNoResourcesExplicit(p; quiet = true)
  
 end
 
-function optimPlannerNoResourcesRobust(SOp, Dp; quiet = false)
+function optimPlannerNoResourcesRobust(SOp, Dp; quiet = true)
 
     SOpInner = deepcopy(SOp)
 
@@ -159,7 +159,7 @@ function optimPlannerNoResourcesRobust(SOp, Dp; quiet = false)
     γ2 = 0.0
     
     err = 1.0; Nit = 0
-    while (err > GLOBAL_TOL) & (Nit < GLOBAL_MAX_IT)
+    while (err > GLOBAL_TOL) & (Nit < 50)
         
         candidateSolPre = candidateSol
         γ1Pre = SOpInner.γ1 
@@ -292,57 +292,57 @@ end
 
 
 
-function computeAllPlannerNoResources()
+function computeAllPlannerNoResources(SOp,Dp)
 
-    sol = optimPlannerNoResources(SOpG,quiet=true)
+    sol = optimPlannerNoResources(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
+    GComputed = computeG(SOp,sol)
 
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1PlannerNoResources(SOpG,sol)
-    WelFare2 = computeWelFare2PlannerNoResources(SOpG,sol)
-    WelFare = computeWelFarePlannerNoResources(SOpG,sol)
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
+    WelFare1 = computeWelFare1PlannerNoResources(SOp,sol)
+    WelFare2 = computeWelFare2PlannerNoResources(SOp,sol)
+    WelFare = computeWelFarePlannerNoResources(SOp,sol)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
 
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 
-function computeAllPlannerNoResourcesExplicit()
+function computeAllPlannerNoResourcesExplicit(SOp,Dp)
 
-    sol = optimPlannerNoResourcesExplicit(SOpG,quiet=true)
+    sol = optimPlannerNoResourcesExplicit(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
-    G1 = computeG1(SOpG,sol)
-    G2 = computeG2(SOpG,sol)
+    GComputed = computeG(SOp,sol)
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1PlannerNoResources(SOpG,sol)
-    WelFare2 = computeWelFare2PlannerNoResources(SOpG,sol)
-    WelFare = computeWelFarePlannerNoResources(SOpG,sol)
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
-    gRb = g(Rb,SOpG)
-    hRa = h(Ra,SOpG)
+    WelFare1 = computeWelFare1PlannerNoResources(SOp,sol)
+    WelFare2 = computeWelFare2PlannerNoResources(SOp,sol)
+    WelFare = computeWelFarePlannerNoResources(SOp,sol)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa, GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 

@@ -106,7 +106,70 @@ function optimStackelberg(p; quiet = true, showObj = false)
     solDict = Dict(zip(varNames,solValues))
     return solDict
 end
-    
+
+function optimStackelbergRobust(SOp,Dp; quiet = true)
+    SOpInner = deepcopy(SOp)
+
+    #check that we are in the case where there is a soluton, i.e. AK log case
+    @assert SOp.α == 1
+    @assert SOp.σ1 == 1
+    @assert SOp.σ2 == 1
+
+    # initialization
+    γ1 = SOpInner.γ1
+    γ2 = SOpInner.γ2
+    solStackelbergStart = optimStackelbergExplicit(SOpInner; quiet = true)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [solStackelbergStart[name] for name in varNames]
+
+
+    RobustProblem = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(RobustProblem, "tol", GLOBAL_TOL)
+    # verbose
+    if quiet == false
+        unset_silent(RobustProblem)
+    else
+        set_silent(RobustProblem)
+    end
+
+    JuMP.@variables(RobustProblem, begin
+    γ1o ≥ 0
+    end)
+   
+    @NLexpression(RobustProblem, gRb, (SOp.g∞ * Rb + SOp.g0) / (Rb + 1))
+    @NLexpression(RobustProblem, F, (Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ) +
+                - SOp.ηK*SOp.Φ/SOp.ρ * ((B1+Rb)/(SOp.A̅-1) + B2/(SOp.A̅*SOp.h0-1)) + 
+                + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + gRb*B2^SOp.θ2)))
+
+
+    @NLexpression(RobustProblem, aγ2, 2*SOp.αR)
+    @NLexpression(RobustProblem, bγ2, SOp.ρ*F - 1/γ1o - 2*SOp.αR*SOp.γ2)
+    @NLexpression(RobustProblem, cγ2, -1)
+    @NLexpression(RobustProblem, γ2ofγ1, (-bγ2 + sqrt(bγ2^2-4*aγ2*cγ2))/(2*aγ2) )
+
+    @NLobjective(RobustProblem, Min, γ1o * (-1/(SOp.ρ*γ2ofγ1) + F) + 
+    + SOp.αR/SOp.ρ * (γ1o-SOp.γ1)^2 + 1/SOp.ρ*log((SOp.A̅-1)/(γ1o*SOp.Φ*SOp.ηK)) - 1/SOp.ρ)
+
+    JuMP.optimize!(RobustProblem)
+
+    γ1 = value(γ1o)
+
+    g(x) = (SOp.g∞ * x + SOp.g0) / (x+1)
+    F = Dp.S̅/SOp.ρ - Dp.P0/SOp.ρ - Dp.T0/(SOp.ρ+SOp.ϕ) +
+    - SOp.ηK*SOp.Φ/SOp.ρ * ((B1+Rb)/(SOp.A̅-1) + B2/(SOp.A̅*SOp.h0-1)) + 
+    + SOp.Φ*SOp.ηB/SOp.ρ * (B1^SOp.θ1 + g(Rb)*B2^SOp.θ2) 
+    aγ2 = 2*SOp.αR
+    bγ2 = SOp.ρ*F - 1/γ1 - 2*SOp.αR*SOp.γ2
+    cγ2 = -1
+    γ2 = (-bγ2 + sqrt(bγ2^2-4*aγ2*cγ2))/(2*aγ2) 
+
+    SOpInner.γ1 = γ1
+    SOpInner.γ2 = γ2
+    solStackelberg = optimStackelbergExplicit(SOpInner; quiet = true)
+    C1,C2,B1,B2,K1,K2,Ra,Rb = [solStackelberg[name] for name in varNames]
+
+    solDict = Dict(zip(varNames,[C1,C2,B1,B2,K1,K2,Ra,Rb]))
+    return solDict, γ1, γ2
+end
 
 function optimStackelbergExplicit(p; quiet = true)
 
@@ -154,7 +217,9 @@ function optimStackelbergExplicit(p; quiet = true)
     
     Ra,Rb = computeRaRb(p; quiet=quiet)
     if p.ηK / p.ηB >= p.g0^p.θ2 * p.gPrime0^(1-p.θ2) * p.θ2^p.θ2 * (p.A̅ - 1)^(1-p.θ2) * (p.A̅ * h(Ra) - 1)^p.θ2
-        println("Explicit condition for Rb = 0 matched")
+        if quiet == false
+            println("Explicit condition for Rb = 0 matched")
+        end
     end
 
     C1 = ( (p.A̅ - 1) / (p.γ1*p.Φ*p.ηK) )^(1/p.σ1)
@@ -215,55 +280,55 @@ function computeWelFare2Stackelberg(p,sol)
     return obj
 end
 
-function computeAllStackelberg()
+function computeAllStackelberg(SOp,Dp)
 
-    sol = optimStackelberg(SOpG,quiet=true)
+    sol = optimStackelberg(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
+    GComputed = computeG(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Stackelberg(SOpG,sol)
-    WelFare2 = computeWelFare2Stackelberg(SOpG,sol)
+    WelFare1 = computeWelFare1Stackelberg(SOp,sol)
+    WelFare2 = computeWelFare2Stackelberg(SOp,sol)
     WelFare = WelFare1 + WelFare2
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 
-function computeAllStackelbergExplicit()
+function computeAllStackelbergExplicit(SOp,Dp)
 
-    sol = optimStackelbergExplicit(SOpG,quiet=true)
+    sol = optimStackelbergExplicit(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
-    G1 = computeG1(SOpG,sol)
-    G2 = computeG2(SOpG,sol)
+    GComputed = computeG(SOp,sol)
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Stackelberg(SOpG,sol)
-    WelFare2 = computeWelFare2Stackelberg(SOpG,sol)
+    WelFare1 = computeWelFare1Stackelberg(SOp,sol)
+    WelFare2 = computeWelFare2Stackelberg(SOp,sol)
     WelFare = WelFare1 + WelFare2
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
-    gRb = g(Rb,SOpG)
-    hRa = h(Ra,SOpG)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa, GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 

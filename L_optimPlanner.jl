@@ -72,7 +72,7 @@ function optimPlanner(p; quiet = true, showObj = false)
     return solDict
 end
 
-function optimPlannerExplicit(p; quiet = false)
+function optimPlannerExplicit(p; quiet = true)
 
     #check that we are in the case where there is an explicit solution 
     @assert p.α == 1
@@ -102,7 +102,9 @@ function optimPlannerExplicit(p; quiet = false)
     C2 = ( (p.A̅-1)/((p.γ1+p.γ2)*p.Φ*p.ηK) )^(1/p.σ2)
     Ra = 0
     if p.ηK / p.ηB >= p.g0^p.θ2 * p.gPrime0^(1-p.θ2) * p.θ2^p.θ2 * (p.A̅ - 1)
-        println("Explicit condition for Rb = 0 matched")
+        if quiet == false
+            println("Explicit condition for Rb = 0 matched")
+        end
         Rb = 0 
     else
         Rb = computeRb(p; quiet = quiet)
@@ -119,7 +121,7 @@ function optimPlannerExplicit(p; quiet = false)
 
 end
 
-function optimPlannerRobust(SOp, Dp; quiet = false)
+function optimPlannerRobust(SOp, Dp; quiet = true)
 
     #check that we are in the case where there is a soluton, i.e. AK log case
     @assert SOp.α == 1
@@ -147,7 +149,9 @@ function optimPlannerRobust(SOp, Dp; quiet = false)
 
     Ra = 0
     if SOp.ηK / SOp.ηB >= SOp.g0^SOp.θ2 * SOp.gPrime0^(1-SOp.θ2) * SOp.θ2^SOp.θ2 * (SOp.A̅ - 1)
-        println("Explicit condition for Rb = 0 matched")
+        if quiet == false
+            println("Explicit condition for Rb = 0 matched")
+        end
         Rb = 0 
     else
         Rb = computeRb(p; quiet = quiet)
@@ -183,7 +187,7 @@ function optimPlannerRobust(SOp, Dp; quiet = false)
         JuMP.optimize!(RobustProblem)
         
         γ1, γ2 = value.([γ1o,γ2o])
-        return γ1,γ2
+        return γ1, γ2
     end
 
     γ1,γ2 = computeγ̂1γ̂2(SOp, Dp; quiet = quiet)
@@ -197,6 +201,25 @@ function optimPlannerRobust(SOp, Dp; quiet = false)
     solDict = Dict(zip(varNames,solValues))
 
     return solDict, γ1, γ2
+
+end
+
+function randomizePlannerRobus(SOp,Dp; N = 1000, quiet = true)
+    
+    SOpAux = deepcopy(SOp)
+    XExp = Exponential(1)
+    γ1Robust, γ2Robust = zeros(N), zeros(N)
+
+    @showprogress for i in 1:N
+        γ1sample = SOp.γ1 * rand(XExp)
+        γ2sample = SOp.γ2 * rand(XExp)
+        SOpAux.γ̂1 = γ1sample
+        SOpAux.γ̂2 = γ2sample
+
+        nothing, γ1Robust[i], γ2Robust[i] = optimPlannerRobust(SOpAux,Dp)
+    end
+
+    return γ1Robust, γ2Robust
 
 end
 
@@ -263,56 +286,56 @@ function computeWelFare2Planner(p,sol)
     return obj
 end
 
-function computeAllPlanner()
+function computeAllPlanner(SOp,Dp)
 
-    sol = optimPlanner(SOpG,quiet=true)
+    sol = optimPlanner(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
+    GComputed = computeG(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Planner(SOpG,sol)
-    WelFare2 = computeWelFare2Planner(SOpG,sol)
-    WelFare = computeWelFarePlanner(SOpG,sol)
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
+    WelFare1 = computeWelFare1Planner(SOp,sol)
+    WelFare2 = computeWelFare2Planner(SOp,sol)
+    WelFare = computeWelFarePlanner(SOp,sol)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
 
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 
-function computeAllPlannerExplicit()
+function computeAllPlannerExplicit(SOp,Dp)
 
-    sol = optimPlannerExplicit(SOpG,quiet=true)
+    sol = optimPlannerExplicit(SOp,quiet=true)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
-    GComputed = computeG(SOpG,sol)
-    G1 = computeG1(SOpG,sol)
-    G2 = computeG2(SOpG,sol)
+    GComputed = computeG(SOp,sol)
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
-    solODE = solveODE(SOpG,DpG,GComputed)
+    solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
-    TempFinal = ComputeTemperature(DpG,P,T)
-    TempInitial = ComputeTemperature(DpG,DpG.P0,DpG.T0)
+    TempFinal = ComputeTemperature(Dp,P,T)
+    TempInitial = ComputeTemperature(Dp,Dp.P0,Dp.T0)
 
-    ΔP = P - DpG.P0
-    ΔT = T - DpG.T0
+    ΔP = P - Dp.P0
+    ΔT = T - Dp.T0
     ΔTemp = TempFinal - TempInitial
 
-    WelFare1 = computeWelFare1Planner(SOpG,sol)
-    WelFare2 = computeWelFare2Planner(SOpG,sol)
-    WelFare = computeWelFarePlanner(SOpG,sol)
-    Y1 = SOpG.A̅ * K1^SOpG.α
-    Y2 = SOpG.A̅ * h(Ra,SOpG) * K2^SOpG.α
-    gRb = g(Rb,SOpG)
-    hRa = h(Ra,SOpG)
+    WelFare1 = computeWelFare1Planner(SOp,sol)
+    WelFare2 = computeWelFare2Planner(SOp,sol)
+    WelFare = computeWelFarePlanner(SOp,sol)
+    Y1 = SOp.A̅ * K1^SOp.α
+    Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
     return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa,GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
