@@ -14,8 +14,12 @@ using DifferentialEquations
 
 # Output
 using PyPlot
+using IndexedTables
 using TexTables
-using JLD2
+using DataFrames
+using Interpolations
+
+# using JLD2
 using ProgressMeter
 
 # Debug
@@ -29,3 +33,5 @@ include("L_optimNashRobustNumeric.jl")
 include("L_optimStackelberg.jl")
 include("L_ODEProblem.jl")
 include("L_printLib.jl")
+include("L_specificOptimCase.jl")
+

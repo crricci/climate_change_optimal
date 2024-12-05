@@ -1,5 +1,5 @@
 
-function optimPlannerNoResources(p; quiet = true, start = nothing, showObj = false)
+function optimPlannerNoResources(p; RaImpact = 1.0, RbImpact = 1.0, quiet = true, start = nothing, showObj = false)
     
     plannerNRProblem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(plannerNRProblem, "tol", GLOBAL_TOL)
@@ -30,8 +30,8 @@ function optimPlannerNoResources(p; quiet = true, start = nothing, showObj = fal
 
     # subexpressions
     @NLexpressions(plannerNRProblem, begin
-    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
-    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
+    gRb, (p.g∞ * RbImpact*Rb + p.g0) / (RbImpact*Rb + 1)
+    hRa, (p.h∞ * RaImpact*Ra + p.h0) / (RaImpact*Ra + 1)
     fK1, K1^p.α
     fK2, K2^p.α
     D1, B1^p.θ1
@@ -78,7 +78,7 @@ function optimPlannerNoResources(p; quiet = true, start = nothing, showObj = fal
     end
 
     solValues = value.([C1,C2,B1,B2,K1,K2,Ra,Rb])
-    solValues[solValues .< 0] .= 0
+    solValues[solValues .< 1e-6] .= 0
     solDict = Dict(zip(varNames,solValues))
 
     if showObj println("Objective: ",computeWelFarePlannerNoResources(p,solDict)) end
@@ -292,12 +292,13 @@ end
 
 
 
-function computeAllPlannerNoResources(SOp,Dp)
+function computeAllPlannerNoResources(SOp,Dp; RaImpact = 1.0, RbImpact = 1.0)
 
-    sol = optimPlannerNoResources(SOp,quiet=true)
+    sol = optimPlannerNoResources(SOp,quiet=true,RaImpact=RaImpact,RbImpact=RbImpact)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
     GComputed = computeG(SOp,sol)
-
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
     solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
@@ -313,9 +314,10 @@ function computeAllPlannerNoResources(SOp,Dp)
     WelFare = computeWelFarePlannerNoResources(SOp,sol)
     Y1 = SOp.A̅ * K1^SOp.α
     Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
-
-    return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
+    return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa, GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 

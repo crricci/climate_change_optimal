@@ -4,16 +4,17 @@ function makeTableResultsExplicit(SOp,Dp)
     allPlanner = computeAllPlannerExplicit(SOp,Dp)
     allPlannerNoResources = computeAllPlannerNoResourcesExplicit(SOp,Dp)
     allNash = computeAllNashExplicit(SOp,Dp)
-    allStackelberg = computeAllStackelbergExplicit(SOp,Dp)
+    # allStackelberg = computeAllStackelbergExplicit(SOp,Dp)
 
     keys = [[Symbol(name) for name in varNames]...,:gRb,:hRa,:G,:G1,:G2, :DeltaP,:DeltaT,:DeltaTemp,:WelFareTot,:WelFare1,:WelFare2,:Y1,:Y2]
 
     TabPlanner = TableCol("Planner", keys, [allPlanner...])
     TabPlannerNoResources = TableCol("RestrictedPlanner", keys, [allPlannerNoResources...])
     TabNash = TableCol("Nash", keys, [allNash...])
-    TabStackelberg = TableCol("Stackelberg", keys, [allStackelberg...])
+    # TabStackelberg = TableCol("Stackelberg", keys, [allStackelberg...])
 
-    TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash,TabStackelberg)
+    # TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash,TabStackelberg)
+    TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash)
     to_tex(TableTotal) |> print
 
     return nothing
@@ -24,16 +25,17 @@ function makeTableResults(SOp,Dp)
     allPlanner = computeAllPlanner(SOp,Dp)
     allPlannerNoResources = computeAllPlannerNoResources(SOp,Dp)
     allNash = computeAllNash(SOp,Dp)
-    allStackelberg = computeAllStackelberg(SOp,Dp)
+    # allStackelberg = computeAllStackelberg(SOp,Dp)
 
-    keys = [[Symbol(name) for name in varNames]...,:G, :DeltaP,:DeltaT,:DeltaTemp,:WelFareTot,:WelFare1,:WelFare2,:Y1,:Y2]
+    keys = [[Symbol(name) for name in varNames]...,:gRb,:hRa,:G,:G1,:G2, :DeltaP,:DeltaT,:DeltaTemp,:WelFareTot,:WelFare1,:WelFare2,:Y1,:Y2]
 
     TabPlanner = TableCol("Planner", keys, [allPlanner...])
     TabPlannerNoResources = TableCol("RestrictedPlanner", keys, [allPlannerNoResources...])
     TabNash = TableCol("Nash", keys, [allNash...])
-    TabStackelberg = TableCol("Stackelberg", keys, [allStackelberg...])
+    # TabStackelberg = TableCol("Stackelberg", keys, [allStackelberg...])
 
-    TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash,TabStackelberg)
+    # TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash,TabStackelberg)
+    TableTotal = hcat(TabPlanner,TabPlannerNoResources,TabNash)
     to_tex(TableTotal) |> print
 
     return nothing
@@ -263,7 +265,7 @@ function plotTemperature(SOp,Dp;explicit=true)
     plot(Dp.TSave, TempPlanner, label = "Global planner",color="blue")
     plot(Dp.TSave, TempPlannerNoResources, label = "Restricted planner",color="gold")
     plot(Dp.TSave, TempNash, label = "Nash",color="green")
-    plot(Dp.TSave, TempStackelberg, label = "Stackelberg",color="red")
+    # plot(Dp.TSave, TempStackelberg, label = "Stackelberg",color="red")
     xlabel("Time (years)")
     ylabel("Global temperature (°C)")
     grid()
@@ -419,8 +421,8 @@ function plotTemperatureRobust(SOp,Dp; alpha = 0.05, quiet = true)
     plot(Dp.TSave, TempPlannerNoResourcesMean,  label = "Restricted planner",color="gold")
     fill_between(Dp.TSave, TempNashDown, TempNashUp,alpha = 0.2,color="green")
     plot(Dp.TSave, TempNashMean, label = "Nash",color="green")
-    fill_between(Dp.TSave, TempStackelbergDown, TempStackelbergUp, alpha = 0.2,color="red")
-    plot(Dp.TSave, TempStackelbergMean, label = "Stackelberg",color="red")
+    # fill_between(Dp.TSave, TempStackelbergDown, TempStackelbergUp, alpha = 0.2,color="red")
+    # plot(Dp.TSave, TempStackelbergMean, label = "Stackelberg",color="red")
     xlabel("Time (years)")
     ylabel("Global temperature (°C)")
     grid()
@@ -470,12 +472,12 @@ function plotTotalEmission(SOp,Dp;explicit = true)
     plot(Dp.TSave, pNash + tNash, label = "Nash - total emissions",color="green")
     plot(Dp.TSave, pNash1 + tNash1, label = "Nash - country 1 emissions",color="green","--")
     plot(Dp.TSave, pNash2 + tNash2, label = "Nash - country 2 emissions",color="green",":")
-    plot(Dp.TSave, pStackelberg + tStackelberg, label = "Stackelberg - total emissions",color="red")
-    plot(Dp.TSave, pStackelberg1 + tStackelberg1, label = "Stackelberg - country 1 emissions",color="red","--")
-    plot(Dp.TSave, pStackelberg2 + tStackelberg2, label = "Stackelberg - country 2 emissions",color="red",":")
+    # plot(Dp.TSave, pStackelberg + tStackelberg, label = "Stackelberg - total emissions",color="red")
+    # plot(Dp.TSave, pStackelberg1 + tStackelberg1, label = "Stackelberg - country 1 emissions",color="red","--")
+    # plot(Dp.TSave, pStackelberg2 + tStackelberg2, label = "Stackelberg - country 2 emissions",color="red",":")
 
     xlabel("Time (years)")
-    ylabel("CO2 concentration (ppm)")
+    ylabel("GHG")
     grid()
     legend()
     tight_layout()
@@ -509,7 +511,7 @@ function plotPTEmission(SOp,Dp;explicit = true)
     plot(Dp.TSave, tStackelberg, label = "Stackelberg - temporary emission",color="red","--")
 
     xlabel("Time (years)")
-    ylabel("CO2 concentration (ppm)")
+    ylabel("GHG")
 
     legend(loc=9,title="(Right scale)") 
     tight_layout()

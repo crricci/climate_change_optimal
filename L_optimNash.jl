@@ -1,19 +1,19 @@
-function optimNash(p; TOL = GLOBAL_TOL, MAX_IT = GLOBAL_MAX_IT, quiet = true)
+function optimNash(p; RaImpact = 1.0, RbImpact = 1.0, TOL = GLOBAL_TOL, MAX_IT = GLOBAL_MAX_IT, quiet = true)
     # by iterated best response
 
     # initial point by social planner optimum
     solPlanner = optimPlanner(p; quiet = true, showObj = false)
     B2,K2 = solPlanner["B2"],solPlanner["K2"]
     
-    C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2)
-    C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb)
+    C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2,RaImpact,RbImpact)
+    C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb,RaImpact,RbImpact)
     candidateSol = [C1,C2,B1,B2,K1,K2,Ra,Rb]
 
     err = 1.0; Nit = 0
     while (err > GLOBAL_TOL) & (Nit < 50)
         
-        C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2)
-        C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb)
+        C1,B1,K1,Ra,Rb = NashNation1(p,B2,K2,RaImpact,RbImpact)
+        C2, B2, K2 = NashNation2(p,B1,K1,Ra,Rb,RaImpact,RbImpact)
         
         err = norm(candidateSol - [C1,C2,B1,B2,K1,K2,Ra,Rb],Inf)
         Nit = Nit + 1 
@@ -35,7 +35,7 @@ function optimNash(p; TOL = GLOBAL_TOL, MAX_IT = GLOBAL_MAX_IT, quiet = true)
     return solDict
 end
 
-function NashNation1(p,B2,K2)
+function NashNation1(p,B2,K2,RaImpact,RbImpact)
 
     nash1Problem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(nash1Problem, "tol", GLOBAL_TOL)
@@ -52,8 +52,8 @@ function NashNation1(p,B2,K2)
 
     # subexpressions
     @NLexpressions(nash1Problem, begin
-    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
-    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
+    gRb, (p.g∞ * RbImpact*Rb + p.g0) / (RbImpact*Rb + 1)
+    hRa, (p.h∞ * RaImpact*Ra + p.h0) / (RaImpact*Ra + 1)
     fK1, K1^p.α
     D1, B1^p.θ1
     D2, gRb * B2^p.θ2
@@ -80,13 +80,13 @@ function NashNation1(p,B2,K2)
     JuMP.optimize!(nash1Problem)
     
     solValues = value.([C1,B1,K1,Ra,Rb])
-    solValues[solValues .< 0] .= 0
+    solValues[solValues .< 1e-6] .= 0
     C1,B1,K1,Ra,Rb = solValues
 
     return C1,B1,K1,Ra,Rb
 end
 
-function NashNation2(p,B1,K1,Ra,Rb)
+function NashNation2(p,B1,K1,Ra,Rb,RaImpact,RbImpact)
 
     nash2Problem = Model(Ipopt.Optimizer)
     set_optimizer_attribute(nash2Problem, "tol", GLOBAL_TOL)
@@ -101,8 +101,8 @@ function NashNation2(p,B1,K1,Ra,Rb)
 
     # subexpressions
     @NLexpressions(nash2Problem, begin
-    gRb, (p.g∞ * Rb + p.g0) / (Rb + 1)
-    hRa, (p.h∞ * Ra + p.h0) / (Ra + 1)
+    gRb, (p.g∞ * RbImpact*Rb + p.g0) / (RbImpact*Rb + 1)
+    hRa, (p.h∞ * RaImpact*Ra + p.h0) / (RaImpact*Ra + 1)
     fK2, K2^p.α
     D1, B1^p.θ1
     D2, gRb * B2^p.θ2
@@ -129,7 +129,7 @@ function NashNation2(p,B1,K1,Ra,Rb)
     JuMP.optimize!(nash2Problem)
 
     solValues = value.([C2, B2, K2])
-    solValues[solValues .< 0] .= 0
+    solValues[solValues .< 1e-6] .= 0
     C2, B2, K2 = solValues
 
     return C2, B2, K2
@@ -332,12 +332,13 @@ function computeWelFare2Nash(p,sol)
 end
 
 
-function computeAllNash(SOp,Dp)
+function computeAllNash(SOp,Dp; RaImpact = 1.0, RbImpact = 1.0)
 
-    sol = optimNash(SOp,quiet=true)
+    sol = optimNash(SOp,quiet=true,RaImpact=RaImpact,RbImpact=RbImpact)
     C1,C2,B1,B2,K1,K2,Ra,Rb = [sol[name] for name in varNames]
     GComputed = computeG(SOp,sol)
-
+    G1 = computeG1(SOp,sol)
+    G2 = computeG2(SOp,sol)
 
     solODE = solveODE(SOp,Dp,GComputed)
     P,T = solODE.u[end]
@@ -353,8 +354,10 @@ function computeAllNash(SOp,Dp)
     WelFare = WelFare1 + WelFare2
     Y1 = SOp.A̅ * K1^SOp.α
     Y2 = SOp.A̅ * h(Ra,SOp) * K2^SOp.α
+    gRb = g(Rb,SOp)
+    hRa = h(Ra,SOp)
 
-    return C1,C2,B1,B2,K1,K2,Ra,Rb, GComputed, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
+    return C1,C2,B1,B2,K1,K2,Ra,Rb,gRb,hRa, GComputed,G1,G2, ΔP, ΔT, ΔTemp, WelFare, WelFare1, WelFare2, Y1, Y2
 
 end
 
